@@ -19,14 +19,14 @@ The critical path is **data model → ingestion → retrieval → LLM → citati
 
 ## Phase 0 — Prerequisites & foundation
 
-- [x] Install toolchain: Python 3.12+, `uv`, Node 20+, `pnpm` (see [README](../README.md))
-- [x] Create Supabase project and collect credentials ([supabase-setup](guides/supabase-setup.md))
-- [x] Create OpenAI API key (needed from Phase 6 onward)
-- [x] Set `USER_AGENT` in `data/download.py` and download sample 10-K corpus:
+- ✅ Install toolchain: Python 3.12+, `uv`, Node 20+, `pnpm` (see [README](../README.md))
+- ✅ Create Supabase project and collect credentials ([supabase-setup](guides/supabase-setup.md))
+- ✅ Create OpenAI API key (needed from Phase 6 onward)
+- ✅ Set `USER_AGENT` in `data/download.py` and download sample 10-K corpus:
   ```bash
   uv run data/download.py
   ```
-- [x] Confirm `data/downloads/manifest.json` lists AAPL, MSFT, NVDA, AMZN, GOOGL filings (2021–2025)
+- ✅ Confirm `data/downloads/manifest.json` lists AAPL, MSFT, NVDA, AMZN, GOOGL filings (2021–2025)
 
 ---
 
@@ -34,25 +34,25 @@ The critical path is **data model → ingestion → retrieval → LLM → citati
 
 Goal: a running FastAPI service with a migrated Supabase schema.
 
-- [x] Init backend deps and project layout ([backend-setup](guides/backend-setup.md))
-- [x] `app/config.py` — settings module, fail fast on missing env vars
-- [x] `app/main.py` — FastAPI app, CORS, health check (`GET /health`)
-- [x] SQLAlchemy models in `app/database/models/`:
-  - [x] `users`
-  - [x] `source_documents`
-  - [x] `document_chunks` (embedding + generated `tsvector`)
-  - [x] `chat_threads`
-  - [x] `chat_messages`
-  - [x] `message_citations`
-- [x] Alembic init + first migration:
-  - [x] `create extension if not exists vector`
-  - [x] `vector(1536)` embedding column
-  - [x] generated `tsvector` column on chunks
-  - [x] HNSW index (vector) + GIN index (full-text)
-  - [x] RLS policies (users see only their own chats)
-- [x] `uv run alembic upgrade head` against Supabase direct connection
-- [x] `app/database/supabase.py` — user-scoped and service-role clients
-- [x] Verify: `uv run uvicorn app.main:app --reload` → health check returns 200
+- ✅ Init backend deps and project layout ([backend-setup](guides/backend-setup.md))
+- ✅ `app/config.py` — settings module, fail fast on missing env vars
+- ✅ `app/main.py` — FastAPI app, CORS, health check (`GET /health`)
+- ✅ SQLAlchemy models in `app/database/models/`:
+  - ✅ `users`
+  - ✅ `source_documents`
+  - ✅ `document_chunks` (embedding + generated `tsvector`)
+  - ✅ `chat_threads`
+  - ✅ `chat_messages`
+  - ✅ `message_citations`
+- ✅ Alembic init + first migration:
+  - ✅ `create extension if not exists vector`
+  - ✅ `vector(1536)` embedding column
+  - ✅ generated `tsvector` column on chunks
+  - ✅ HNSW index (vector) + GIN index (full-text)
+  - ✅ RLS policies (users see only their own chats)
+- ✅ `uv run alembic upgrade head` against Supabase direct connection
+- ✅ `app/database/supabase.py` — user-scoped and service-role clients
+- ✅ Verify: `uv run uvicorn app.main:app --reload` → health check returns 200
 
 ---
 
@@ -62,18 +62,18 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 **Backend**
 
-- [x] `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
-- [x] Reject missing/expired tokens with `401` before any chat or retrieval work
+- ✅ `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
+- ✅ Reject missing/expired tokens with `401` before any chat or retrieval work
 
 **Frontend**
 
-- [x] Scaffold Vite + React + TypeScript + Tailwind + shadcn ([frontend-setup](guides/frontend-setup.md))
-- [x] `src/lib/env.ts` — validate `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- [x] `src/lib/supabase.ts` — browser Supabase client
-- [x] `src/lib/http.ts` + `src/lib/api.ts` — fetch wrapper with automatic bearer token
-- [x] Sign-in / sign-up pages (email only, no SSO)
-- [x] Protected routes — redirect unauthenticated users to login
-- [x] Verify: sign up, sign in, token reaches backend on a test authenticated endpoint
+- ✅ Scaffold Vite + React + TypeScript + Tailwind + shadcn ([frontend-setup](guides/frontend-setup.md))
+- ✅ `src/lib/env.ts` — validate `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- ✅ `src/lib/supabase.ts` — browser Supabase client
+- ✅ `src/lib/http.ts` + `src/lib/api.ts` — fetch wrapper with automatic bearer token
+- ✅ Sign-in / sign-up pages (email only, no SSO)
+- ✅ Protected routes — redirect unauthenticated users to login
+- ✅ Verify: sign up, sign in, token reaches backend on a test authenticated endpoint
 
 ---
 

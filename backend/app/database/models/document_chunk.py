@@ -7,9 +7,8 @@ from sqlalchemy import Computed, ForeignKey, Index, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.database.models.base import Base, created_at_column, uuid_pk
-
-EMBEDDING_DIMENSIONS = 1536
 
 
 class DocumentChunk(Base):
@@ -36,7 +35,7 @@ class DocumentChunk(Base):
     section: Mapped[str | None]
     content: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int]
-    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
+    embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dimensions))
     search_vector: Mapped[Any] = mapped_column(
         TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
     )

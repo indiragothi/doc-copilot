@@ -19,9 +19,11 @@ class Settings(BaseSettings):
     # Direct/session connection (not the transaction pooler) — Alembic needs it.
     database_url: str
 
-    openai_api_key: str
-    openai_embedding_model: str
-    openai_embedding_dimensions: int
+    openrouter_api_key: str
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    llm_model: str
+    embedding_model: str
+    embedding_dimensions: int
 
     # PORT is the name Railway injects.
     host: str = "127.0.0.1"

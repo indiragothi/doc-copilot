@@ -32,7 +32,7 @@ uv run alembic revision --autogenerate -m "add document tables"
 Always review the generated migration. Add explicit operations for Supabase/Postgres features that autogenerate cannot reliably infer:
 
 - `create extension if not exists vector`
-- `vector(1536)` columns
+- `vector(1024)` columns
 - generated `tsvector` columns
 - HNSW and GIN indexes
 - RLS enablement and policies

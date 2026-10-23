@@ -39,3 +39,11 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Markdown conversions of the corpus (regenerate with data/convert_to_markdown.py)
+/data/markdown/*
+!/data/markdown/.gitkeep
+
+# Docling JSON of each filing, input to the chunker (regenerate with data/convert_to_markdown.py)
+/data/docling/*
+!/data/docling/.gitkeep

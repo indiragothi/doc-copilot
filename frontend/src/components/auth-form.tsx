@@ -36,7 +36,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [submitting, setSubmitting] = useState(false)
   const copy = COPY[mode]
 
-  if (session) return <Navigate to="/" replace />
+  if (session) return <Navigate to="/chat" replace />
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

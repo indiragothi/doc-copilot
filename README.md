@@ -19,7 +19,7 @@ Full brief: [docs/client-brief.md](docs/client-brief.md)
 | Retrieval          | Supabase `pgvector` + Postgres full-text search      |
 | Auth               | Supabase Auth (email only)                           |
 | Hosting            | Railway                                              |
-| LLM + embeddings   | OpenAI                                               |
+| LLM + embeddings   | OpenRouter (NVIDIA Nemotron models)                  |
 
 ## Repo layout
 
@@ -45,7 +45,7 @@ Install these before setting up `backend/` or `frontend/`:
 | [Node.js](https://nodejs.org/) | 20+ (LTS) | Frontend toolchain | nodejs.org or `nvm install --lts` |
 | [pnpm](https://pnpm.io/installation) | latest | Frontend package manager | `corepack enable && corepack prepare pnpm@latest --activate` |
 
-You also need accounts/keys for external services once the app is wired up. Start with [docs/guides/supabase-setup.md](docs/guides/supabase-setup.md) (account + project), then create an [OpenAI API key](https://platform.openai.com/api-keys) when the LLM layer is wired up.
+You also need accounts/keys for external services once the app is wired up. Start with [docs/guides/supabase-setup.md](docs/guides/supabase-setup.md) (account + project), then create an [OpenRouter API key](https://openrouter.ai/keys) when the LLM layer is wired up. The project uses OpenRouter's free NVIDIA models: `nvidia/nemotron-3.5-super-vl:free` for chat and `nvidia/nemotron-3.5-embed-8b:free` for embeddings (1024 dimensions).
 
 ## Running locally
 
@@ -65,4 +65,5 @@ uv run data/download.py
 ```
 
 By default this downloads the latest 5 10-K filings for AAPL, MSFT, NVDA, AMZN, and GOOGL into year folders under `data/downloads/` and writes a `manifest.json`.
+`data/convert_to_markdown.py` then converts them to Markdown and Docling JSON, and the `backend/ingest/` scripts load them into Supabase. The current build ingests Apple only (see `docs/todos.md`).
 Downloaded files are gitignored; the `data/` folder itself stays in git for the script and notes.

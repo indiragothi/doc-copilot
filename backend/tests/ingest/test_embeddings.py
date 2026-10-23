@@ -3,7 +3,7 @@ import math
 import pytest
 
 from app.config import settings
-from ingest.embeddings import fit_dimensions
+from app.retrieval.embeddings import fit_dimensions
 
 
 def test_exact_size_vector_is_returned_unchanged():

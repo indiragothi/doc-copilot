@@ -128,13 +128,13 @@ Known gaps: `page` is empty (the HTML has no page numbers; page footers remain a
 
 Goal: a user question returns ranked, relevant source passages.
 
-- [ ] `retrieval/queries.py` — pgvector semantic search over `document_chunks`
-- [ ] `retrieval/queries.py` — Postgres full-text search over `search_vector`
-- [ ] `retrieval/fusion.py` — Reciprocal Rank Fusion in Python
-- [ ] `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
-- [ ] Unit tests: fusion ranking, query assembly (mock DB)
-- [ ] Integration test (optional, `@pytest.mark.integration`): real query against ingested corpus
-- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (manual or scripted)
+- ✅ `retrieval/queries.py` — pgvector semantic search over `document_chunks`
+- ✅ `retrieval/queries.py` — Postgres full-text search over `search_vector`
+- ✅ `retrieval/fusion.py` — Reciprocal Rank Fusion in Python
+- ✅ `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
+- ✅ Unit tests: fusion ranking, query assembly (mock DB)
+- ✅ Integration test (`@pytest.mark.integration`): real query against ingested corpus (written; not yet run — OpenRouter free embedding quota hit)
+- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (DB path checked with a stored vector; needs a live embedding run once the daily quota resets: `uv run python -m app.retrieval.cli "..." --ticker AAPL`)
 
 ---
 

@@ -369,6 +369,7 @@ Backend settings:
 - `ALLOWED_ORIGINS`
 - `LLM_MODEL`
 - `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` (1024)
+- `RETRIEVAL_TOP_K`, `RETRIEVAL_CANDIDATE_K`, `RETRIEVAL_RRF_K`, `RETRIEVAL_NEIGHBOR_RADIUS` (optional; defaults 8, 50, 60, 1)
 
 Do not read environment variables directly from components, route handlers, or services. Frontend code should use `src/lib/env.ts`. Backend code should use `app/config.py`.
 

@@ -78,11 +78,30 @@ def test_insufficient_evidence_may_have_no_citations():
     assert validate_answer(answer, {}) == []
 
 
-def test_insufficient_evidence_still_checks_any_citations_it_has():
+def test_insufficient_evidence_with_citations_is_rejected():
     chunk = passage()
     answer = grounded(chunk).model_copy(update={"insufficient_evidence": True})
 
-    assert validate_answer(answer, {}) != []
+    violations = validate_answer(answer, {chunk.chunk_id: chunk})
+
+    assert violations == ["An insufficient-evidence answer must not include citations."]
+
+
+def test_empty_answer_is_rejected():
+    for answer in (
+        GroundedAnswer(answer="   ", insufficient_evidence=True),
+        GroundedAnswer(answer=""),
+    ):
+        assert validate_answer(answer, {}) == ["The answer text is empty."]
+
+
+def test_markers_must_be_numbered_from_one_without_gaps():
+    chunk = passage()
+    answer = grounded(chunk, marker=2, text="Services grew to $96.2 billion [2].")
+
+    violations = validate_answer(answer, {chunk.chunk_id: chunk})
+
+    assert violations == ["Citation markers must be numbered 1, 2, 3... without gaps."]
 
 
 def test_marker_in_text_without_citation_is_rejected():

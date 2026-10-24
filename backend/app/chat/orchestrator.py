@@ -1,3 +1,4 @@
+import time
 from uuid import UUID
 
 import structlog
@@ -31,10 +32,16 @@ async def run_turn(
     message, never the unverified text.
     """
     deps = DocumentAgentDeps(user_id=user_id, thread_id=thread_id, retriever=retriever)
+    started = time.perf_counter()
     try:
         result = await agent.run(question, message_history=history, deps=deps)
     except UnexpectedModelBehavior as error:
-        log.warning("grounding_failed", thread_id=str(thread_id), error=str(error))
+        log.warning(
+            "grounding_failed",
+            thread_id=str(thread_id),
+            seconds=round(time.perf_counter() - started, 2),
+            error=str(error),
+        )
         return VerifiedAnswer(text=FAILURE_MESSAGE)
 
     answer = result.output
@@ -54,9 +61,14 @@ async def run_turn(
         for citation in sorted(answer.citations, key=lambda c: c.marker)
         for passage in [deps.retrieved[citation.chunk_id]]
     ]
+    usage = result.usage
     log.info(
         "turn_complete",
         thread_id=str(thread_id),
+        seconds=round(time.perf_counter() - started, 2),
+        model_requests=usage.requests,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
         passages_retrieved=len(deps.retrieved),
         citations=len(citations),
         insufficient_evidence=answer.insufficient_evidence,

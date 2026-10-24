@@ -103,3 +103,43 @@ def test_no_hits_returns_empty_list(monkeypatch):
     patch_queries(monkeypatch, semantic=[], keyword=[])
 
     assert asyncio.run(retriever().search("nothing")) == []
+
+
+def test_unset_limits_come_from_settings(monkeypatch):
+    from app.config import settings
+
+    calls = []
+    patch_queries(
+        monkeypatch, semantic=[uuid4() for _ in range(5)], keyword=[], calls=calls
+    )
+    monkeypatch.setattr(settings, "retrieval_top_k", 2)
+    monkeypatch.setattr(settings, "retrieval_candidate_k", 9)
+
+    results = asyncio.run(retriever().search("revenue"))
+
+    assert len(results) == 2
+    assert {call[2] for call in calls} == {9}
+
+
+def test_explicit_limits_override_settings(monkeypatch):
+    from app.config import settings
+
+    patch_queries(monkeypatch, semantic=[uuid4() for _ in range(5)], keyword=[])
+    monkeypatch.setattr(settings, "retrieval_top_k", 2)
+
+    assert len(asyncio.run(retriever().search("revenue", top_k=4))) == 4
+
+
+def test_read_chunks_keeps_requested_order_and_skips_unknown_ids(monkeypatch):
+    a, b, missing = uuid4(), uuid4(), uuid4()
+
+    async def fetch_passages(connection, chunk_ids):
+        return {
+            chunk_id: passage(chunk_id) for chunk_id in chunk_ids if chunk_id != missing
+        }
+
+    monkeypatch.setattr(queries, "fetch_passages", fetch_passages)
+
+    results = asyncio.run(retriever().read_chunks([b, missing, a]))
+
+    assert [r.chunk_id for r in results] == [b, a]

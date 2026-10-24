@@ -16,16 +16,27 @@ def validate_answer(
     answer: GroundedAnswer, retrieved: Mapping[UUID, SourcePassage]
 ) -> list[str]:
     """Return every grounding violation; an empty list means the answer may be shown."""
-    violations: list[str] = []
+    if not answer.answer.strip():
+        return ["The answer text is empty."]
 
-    if not answer.citations and not answer.insufficient_evidence:
-        violations.append(
+    # Declining to answer is the one case that needs no evidence, and must claim none.
+    if answer.insufficient_evidence:
+        if answer.citations:
+            return ["An insufficient-evidence answer must not include citations."]
+        return []
+
+    if not answer.citations:
+        return [
             "The answer has no citations and does not say the evidence is insufficient."
-        )
+        ]
 
+    violations: list[str] = []
     markers = [citation.marker for citation in answer.citations]
-    for marker in sorted({m for m in markers if markers.count(m) > 1}):
+    duplicates = sorted({m for m in markers if markers.count(m) > 1})
+    for marker in duplicates:
         violations.append(f"Marker [{marker}] is used by more than one citation.")
+    if not duplicates and sorted(markers) != list(range(1, len(markers) + 1)):
+        violations.append("Citation markers must be numbered 1, 2, 3... without gaps.")
 
     for citation in answer.citations:
         passage = retrieved.get(citation.chunk_id)

@@ -19,9 +19,12 @@ class FakeRetriever:
         self.passages = passages
         self.filters = None
 
-    async def search(self, query, *, top_k, filters, neighbor_window):
+    async def search(self, query, *, filters, neighbor_window):
         self.filters = filters
         return self.passages
+
+    async def read_chunks(self, chunk_ids):
+        return [p for p in self.passages if p.chunk_id in chunk_ids]
 
     async def read_chunk(self, chunk_id, *, neighbor_window=0):
         return next((p for p in self.passages if p.chunk_id == chunk_id), None)
@@ -119,3 +122,26 @@ def test_read_chunk_makes_a_chunk_citable():
     result = run(model, make_deps(passage))
 
     assert result.output.citations[0].chunk_id == passage.chunk_id
+
+
+def test_read_chunks_fetches_several_chunks_in_one_call():
+    passage = make_passage()
+    deps = make_deps(passage)
+    model = scripted(
+        ToolCallPart("read_chunks", {"chunk_ids": [str(passage.chunk_id)]}),
+        final(passage.chunk_id, "up 13% from 2024"),
+    )
+
+    result = run(model, deps)
+
+    assert deps.retrieved == {passage.chunk_id: passage}
+    assert result.output.citations[0].chunk_id == passage.chunk_id
+
+
+def test_read_chunks_with_only_unknown_ids_is_retried_then_fails():
+    passage = make_passage()
+    unknown = ToolCallPart("read_chunks", {"chunk_ids": [str(uuid4())]})
+    model = scripted(unknown, unknown, unknown, unknown)
+
+    with pytest.raises(UnexpectedModelBehavior):
+        run(model, make_deps(passage))

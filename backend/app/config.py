@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     embedding_model: str
     embedding_dimensions: int
 
+    # Retrieval tuning; override with an env var of the same name (e.g. RETRIEVAL_TOP_K=10).
+    retrieval_top_k: int = 8
+    # Hits taken from each of the two searches before they are fused.
+    retrieval_candidate_k: int = 50
+    retrieval_rrf_k: int = 60
+    # Chunks added on each side of a returned passage as context.
+    retrieval_neighbor_radius: int = 1
+
     # PORT is the name Railway injects.
     host: str = "127.0.0.1"
     port: int = 8000

@@ -8,13 +8,14 @@ from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.assistant.deps import DocumentAgentDeps
 from app.assistant.outputs import GroundedAnswer
+from app.assistant.progress import tool_timer
 from app.config import settings
 from app.grounding.validator import validate_answer
 from app.retrieval.models import SearchFilters, SourcePassage
 
 INSTRUCTIONS = (Path(__file__).parent / "instructions.md").read_text(encoding="utf-8")
-SEARCH_TOP_K = 8
 MAX_SURROUNDING_CHUNKS = 3
+MAX_BATCH_CHUNKS = 10
 # One corrective retry when validation fails; after that the turn fails closed.
 OUTPUT_RETRIES = 1
 
@@ -78,9 +79,30 @@ async def search_filings(
         fiscal_year=fiscal_year,
         form_type=form_type,
     )
-    passages = await ctx.deps.retriever.search(
-        query, top_k=SEARCH_TOP_K, filters=filters, neighbor_window=0
-    )
+    with tool_timer(
+        "search_filings", query=query, filters=filters.model_dump()
+    ) as done:
+        passages = await ctx.deps.retriever.search(
+            query, filters=filters, neighbor_window=0
+        )
+        done(results=len(passages))
+    _remember(ctx, passages)
+    return [_render(passage) for passage in passages]
+
+
+@agent.tool
+async def read_chunks(
+    ctx: RunContext[DocumentAgentDeps], chunk_ids: list[UUID]
+) -> list[dict]:
+    """Read several passages in full by chunk_id, in one call. Prefer this to repeated read_chunk."""
+    wanted = chunk_ids[:MAX_BATCH_CHUNKS]
+    with tool_timer("read_chunks", requested=len(wanted)) as done:
+        passages = await ctx.deps.retriever.read_chunks(wanted)
+        done(results=len(passages))
+    if not passages:
+        raise ModelRetry(
+            "None of those chunk ids exist. Use chunk_ids from search_filings."
+        )
     _remember(ctx, passages)
     return [_render(passage) for passage in passages]
 
@@ -88,7 +110,9 @@ async def search_filings(
 @agent.tool
 async def read_chunk(ctx: RunContext[DocumentAgentDeps], chunk_id: UUID) -> dict:
     """Read one passage in full by its chunk_id."""
-    passage = await ctx.deps.retriever.read_chunk(chunk_id)
+    with tool_timer("read_chunk") as done:
+        passage = await ctx.deps.retriever.read_chunk(chunk_id)
+        done(found=passage is not None)
     if passage is None:
         raise ModelRetry(
             f"No chunk with id {chunk_id}. Use a chunk_id from search_filings."
@@ -102,9 +126,11 @@ async def read_surrounding_chunks(
     ctx: RunContext[DocumentAgentDeps], chunk_id: UUID, window: int = 1
 ) -> dict:
     """Read a passage together with the text of the chunks just before and after it."""
-    passage = await ctx.deps.retriever.read_chunk(
-        chunk_id, neighbor_window=min(max(window, 1), MAX_SURROUNDING_CHUNKS)
-    )
+    with tool_timer("read_surrounding_chunks") as done:
+        passage = await ctx.deps.retriever.read_chunk(
+            chunk_id, neighbor_window=min(max(window, 1), MAX_SURROUNDING_CHUNKS)
+        )
+        done(found=passage is not None)
     if passage is None:
         raise ModelRetry(
             f"No chunk with id {chunk_id}. Use a chunk_id from search_filings."

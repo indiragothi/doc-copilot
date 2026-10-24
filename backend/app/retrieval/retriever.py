@@ -4,6 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.config import settings
 from app.retrieval import queries
 from app.retrieval.embeddings import embed_query
 from app.retrieval.fusion import reciprocal_rank_fusion
@@ -25,18 +26,27 @@ class DocumentRetriever:
         self,
         query: str,
         *,
-        top_k: int = 8,
-        candidate_k: int = 50,
+        top_k: int | None = None,
+        candidate_k: int | None = None,
         filters: SearchFilters | None = None,
-        neighbor_window: int = 1,
+        neighbor_window: int | None = None,
     ) -> list[SourcePassage]:
+        """Unset limits fall back to the `retrieval_*` settings."""
+        if top_k is None:
+            top_k = settings.retrieval_top_k
+        if candidate_k is None:
+            candidate_k = settings.retrieval_candidate_k
+        if neighbor_window is None:
+            neighbor_window = settings.retrieval_neighbor_radius
         filters = filters or SearchFilters()
         embedding = await self._embed(query)
         semantic, keyword = await asyncio.gather(
             self._semantic(embedding, candidate_k, filters),
             self._keyword(query, candidate_k, filters),
         )
-        fused = reciprocal_rank_fusion([semantic, keyword])[:top_k]
+        fused = reciprocal_rank_fusion([semantic, keyword], k=settings.retrieval_rrf_k)[
+            :top_k
+        ]
         if not fused:
             return []
 
@@ -53,6 +63,12 @@ class DocumentRetriever:
             )
             for chunk_id, score in fused
         ]
+
+    async def read_chunks(self, chunk_ids: list[UUID]) -> list[SourcePassage]:
+        """Several chunks in one query, in the order asked; unknown ids are skipped."""
+        async with self._engine.connect() as connection:
+            passages = await queries.fetch_passages(connection, chunk_ids)
+        return [passages[chunk_id] for chunk_id in chunk_ids if chunk_id in passages]
 
     async def read_chunk(
         self, chunk_id: UUID, *, neighbor_window: int = 0

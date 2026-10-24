@@ -134,7 +134,7 @@ Goal: a user question returns ranked, relevant source passages.
 - ✅ `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
 - ✅ Unit tests: fusion ranking, query assembly (mock DB)
 - ✅ Integration test (`@pytest.mark.integration`): real query against ingested corpus (written; not yet run — OpenRouter free embedding quota hit)
-- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (DB path checked with a stored vector; needs a live embedding run once the daily quota resets: `uv run python -m app.retrieval.cli "..." --ticker AAPL`)
+- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (DB path checked with a stored vector; needs a live embedding run once the embedding model is available again: `uv run python -m scripts.smoke_retrieval`, or `uv run python -m app.retrieval.cli "..." --ticker AAPL`. Last attempt hit a 504 from OpenRouter, model unavailable)
 
 ---
 
@@ -150,6 +150,11 @@ Goal: grounded answers with enforced citations — the core product contract.
 - ✅ `chat/streaming.py` — AI SDK-compatible stream (text deltas + `data-citation` parts). The verified answer is streamed after validation, not token by token
 - ✅ Persist `message_citations` linked to assistant messages (admin client: users have read-only RLS on that table); citation parts are also stored in the message's `parts`
 - ✅ Unit tests: citation validation, grounding enforcement (fake models), message conversion, streaming, routes (`tests/grounding/`, `tests/assistant/`, `tests/chat/`)
+- ✅ Validator also rejects empty answers, citations on an insufficient-evidence answer, and marker gaps (must be 1..N)
+- ✅ Retrieval tuning (`retrieval_top_k`, `retrieval_candidate_k`, `retrieval_rrf_k`, `retrieval_neighbor_radius`) in `app/config.py`, env-overridable
+- ✅ Batch `read_chunks` tool and tool-usage rules in the instructions (fewer model rounds)
+- ✅ Per-tool timing and per-turn token usage in structlog events (`assistant/progress.py`, `turn_complete`)
+- ✅ Smoke scripts: `scripts/smoke_retrieval.py` (Phase 5 check) and `scripts/smoke_assistant.py <query-key>` (Phase 6 check; keys: apple-mix, apple-suppliers, amazon-aws, q10-refusal, underspecified)
 - [ ] Verify against [client-brief example questions](client-brief.md#example-analyst-questions) (needs a live run: embedding quota plus the free chat model's tool calling, neither tested yet; `page` is empty, so "pages" means filing and section):
   - [ ] Answers cite specific filings and pages
   - [ ] Under-specified questions get "not enough evidence" responses

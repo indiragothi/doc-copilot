@@ -152,7 +152,7 @@ backend/app/
 ├── assistant/
 │   ├── agent.py                # PydanticAI agent definition
 │   ├── deps.py                 # Runtime dependency dataclass for the agent
-│   ├── outputs.py              # GroundedAnswer, Citation, and SourcePassage
+│   ├── outputs.py              # GroundedAnswer, Citation, VerifiedAnswer, VerifiedCitation
 │   └── instructions.md         # System instructions and product contract
 ├── retrieval/
 │   ├── queries.py              # pgvector and full-text SQL queries
@@ -177,14 +177,17 @@ class DocumentAgentDeps:
     user_id: str
     thread_id: str
     retriever: DocumentRetriever
-    grounding_validator: GroundingValidator
+    # Every passage a tool returned this turn; the only chunks the answer may cite.
+    retrieved: dict[UUID, SourcePassage] = field(default_factory=dict)
 
 
 class GroundedAnswer(BaseModel):
-    answer: str
-    citations: list[Citation]
-    cited_passages: list[SourcePassage]
+    answer: str  # text with [n] markers
+    citations: list[Citation]  # marker, chunk_id, verbatim quote
+    insufficient_evidence: bool = False
 ```
+
+The validator is not a dependency of the agent. `grounding/validator.py` is registered as the agent's output validator, so a violation is sent back to the model once as a retry; if the retry also fails, PydanticAI raises and the orchestrator returns a fixed "could not verify" message. After validation, `chat/orchestrator.py` joins each citation with its passage into a `VerifiedAnswer` (the excerpt, filing metadata and section the UI needs).
 
 The agent's instructions should encode the product contract:
 
@@ -263,10 +266,10 @@ The `messages` payload should use the AI SDK UI message format at the frontend b
 
 Streaming responsibilities:
 
-- Send text deltas as the answer is generated.
-- Send citation/source metadata as structured parts once available.
-- Send clear error events for authentication failures, missing threads, retrieval failures, and grounding failures.
-- Persist only after the assistant run completes successfully, unless a separate partial-message model is deliberately introduced later.
+- The answer is generated and validated in full before anything is streamed, so unverified text never reaches the browser. The verified text is then sent as small text deltas.
+- Citations follow the text as `data-citation` parts (`{"type": "data-citation", "id": "<marker>", "data": {...}}`) carrying marker, chunk id, quote, excerpt, ticker, form type, fiscal year, filing date, section and page.
+- Authentication failures, missing threads and upstream model failures (HTTP 502) are plain HTTP errors returned before the stream starts. A grounding failure is a normal assistant message with fixed text, so it appears in history.
+- Persist after the answer is verified and before streaming: the assistant message, its parts (text plus citation parts) and the `message_citations` rows. The stream's `messageId` is the saved assistant message id. `message_citations` is written with the admin client because users have read-only access to it under RLS.
 
 ## Data Model
 
@@ -328,6 +331,7 @@ The backend should enforce these invariants:
 - Every citation maps to a retrieved source passage.
 - Cited passages include enough metadata for the frontend to show company, filing, date, page or section, and excerpt.
 - The model cannot cite documents that were not retrieved for the current request.
+- Every citation quote appears verbatim (ignoring whitespace) in the cited chunk's text, and every `[n]` marker in the answer has exactly one citation and the reverse.
 - If citation validation fails, the backend returns a controlled failure instead of a polished unsupported answer.
 
 This policy should be covered by backend unit tests around retrieval, citation extraction, and grounding enforcement.

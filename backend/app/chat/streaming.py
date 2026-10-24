@@ -1,5 +1,6 @@
 import json
-from collections.abc import AsyncIterator
+import re
+from collections.abc import AsyncIterator, Iterable
 from typing import Any
 from uuid import uuid4
 
@@ -10,7 +11,7 @@ STREAM_HEADERS = {
     "X-Accel-Buffering": "no",
 }
 
-TEXT_END = "text-end"
+WORD = re.compile(r"\S+\s*")
 
 
 def sse(event: dict[str, Any] | str) -> str:
@@ -18,15 +19,29 @@ def sse(event: dict[str, Any] | str) -> str:
     return f"data: {data}\n\n"
 
 
+async def word_deltas(text: str) -> AsyncIterator[str]:
+    """Split a finished answer into small deltas, keeping whitespace and newlines."""
+    for match in WORD.finditer(text):
+        yield match.group()
+
+
 async def ui_message_stream(
     deltas: AsyncIterator[str],
+    *,
+    message_id: str | None = None,
+    data_parts: Iterable[dict[str, Any]] = (),
 ) -> AsyncIterator[dict[str, Any] | str]:
-    """Yield AI SDK UI message stream events; callers frame them with `sse`."""
+    """Yield AI SDK UI message stream events; callers frame them with `sse`.
+
+    `data_parts` (e.g. citations) are sent after the text, before the stream finishes.
+    """
     text_id = uuid4().hex
-    yield {"type": "start", "messageId": uuid4().hex}
+    yield {"type": "start", "messageId": message_id or uuid4().hex}
     yield {"type": "text-start", "id": text_id}
     async for delta in deltas:
         yield {"type": "text-delta", "id": text_id, "delta": delta}
-    yield {"type": TEXT_END, "id": text_id}
+    yield {"type": "text-end", "id": text_id}
+    for part in data_parts:
+        yield part
     yield {"type": "finish"}
     yield "[DONE]"

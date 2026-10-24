@@ -1,8 +1,19 @@
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    UserPromptPart,
+)
+
+from app.assistant.outputs import VerifiedCitation
 
 TITLE_MAX_CHARS = 60
+# Earlier turns given to the model for follow-up questions; bounds prompt size.
+HISTORY_MESSAGE_LIMIT = 10
 
 
 class UIMessage(BaseModel):
@@ -25,12 +36,38 @@ def text_parts(text: str) -> list[dict[str, str]]:
     return [{"type": "text", "text": text}]
 
 
+def citation_part(citation: VerifiedCitation) -> dict[str, Any]:
+    """AI SDK data part carrying everything the UI needs to render a citation."""
+    return {
+        "type": "data-citation",
+        "id": str(citation.marker),
+        "data": citation.model_dump(mode="json"),
+    }
+
+
+def assistant_parts(
+    text: str, citations: list[VerifiedCitation]
+) -> list[dict[str, Any]]:
+    return [*text_parts(text), *(citation_part(citation) for citation in citations)]
+
+
 def row_to_ui_message(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
         "role": row["role"],
         "parts": row["parts"] or text_parts(row["content"]),
     }
+
+
+def history_for_model(rows: list[dict[str, Any]]) -> list[ModelMessage]:
+    """Recent stored messages as plain text; citation parts are left out."""
+    history: list[ModelMessage] = []
+    for row in rows[-HISTORY_MESSAGE_LIMIT:]:
+        if row["role"] == "user":
+            history.append(ModelRequest(parts=[UserPromptPart(row["content"])]))
+        else:
+            history.append(ModelResponse(parts=[TextPart(row["content"])]))
+    return history
 
 
 def title_from(text: str) -> str:

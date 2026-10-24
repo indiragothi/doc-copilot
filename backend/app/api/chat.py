@@ -2,22 +2,27 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic_ai.exceptions import ModelHTTPError
 
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.chat.messages import (
     UIMessage,
+    assistant_parts,
+    citation_part,
+    history_for_model,
     message_text,
     row_to_ui_message,
-    text_parts,
     title_from,
 )
-from app.chat.orchestrator import stub_reply
-from app.chat.streaming import STREAM_HEADERS, TEXT_END, sse, ui_message_stream
+from app.chat.orchestrator import run_turn
+from app.chat.streaming import STREAM_HEADERS, sse, ui_message_stream, word_deltas
 from app.database import chats
 from app.database.supabase import create_admin_client, create_user_client
+from app.retrieval.retriever import DocumentRetriever
 
 router = APIRouter(prefix="/chat")
 
@@ -71,7 +76,9 @@ async def thread_messages(
 
 
 @router.post("/stream")
-async def stream(body: StreamRequest, user: CurrentUserDep) -> StreamingResponse:
+async def stream(
+    body: StreamRequest, user: CurrentUserDep, request: Request
+) -> StreamingResponse:
     # Authorize before streaming starts so failures are plain HTTP errors.
     thread = await owned_thread(body.thread_id, user)
     if not body.messages or body.messages[-1].role != "user":
@@ -80,32 +87,49 @@ async def stream(body: StreamRequest, user: CurrentUserDep) -> StreamingResponse
         )
     # Only the newest user message is trusted; stored history stays authoritative.
     user_message = body.messages[-1]
+    user_text = message_text(user_message)
     client = await create_user_client(user.access_token)
 
-    async def run_turn() -> AsyncIterator[str]:
-        reply: list[str] = []
+    # The answer is verified in full before any of it is streamed, so run it first;
+    # upstream failures then surface as HTTP errors rather than a broken stream.
+    try:
+        answer = await run_turn(
+            DocumentRetriever(request.app.state.engine),
+            user_id=user.id,
+            thread_id=body.thread_id,
+            question=user_text,
+            history=history_for_model(
+                await chats.list_messages(client, body.thread_id)
+            ),
+        )
+    except (ModelHTTPError, APIError) as error:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "The model service failed"
+        ) from error
 
-        async def deltas() -> AsyncIterator[str]:
-            async for delta in stub_reply():
-                reply.append(delta)
-                yield delta
+    parts = assistant_parts(answer.text, answer.citations)
+    message_id = await chats.save_turn(
+        client,
+        body.thread_id,
+        user_text,
+        user_message.parts,
+        answer.text,
+        parts,
+        title_from(user_text) if thread["title"] is None else None,
+    )
+    await chats.save_citations(
+        await create_admin_client(), message_id, answer.citations
+    )
 
-        async for event in ui_message_stream(deltas()):
+    async def events() -> AsyncIterator[str]:
+        stream = ui_message_stream(
+            word_deltas(answer.text),
+            message_id=message_id,
+            data_parts=[citation_part(citation) for citation in answer.citations],
+        )
+        async for event in stream:
             yield sse(event)
-            # Persist once the answer is complete, before the stream closes.
-            if isinstance(event, dict) and event["type"] == TEXT_END:
-                answer = "".join(reply).strip()
-                user_text = message_text(user_message)
-                await chats.save_turn(
-                    client,
-                    body.thread_id,
-                    user_text,
-                    user_message.parts,
-                    answer,
-                    text_parts(answer),
-                    title_from(user_text) if thread["title"] is None else None,
-                )
 
     return StreamingResponse(
-        run_turn(), media_type="text/event-stream", headers=STREAM_HEADERS
+        events(), media_type="text/event-stream", headers=STREAM_HEADERS
     )

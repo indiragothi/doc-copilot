@@ -142,15 +142,15 @@ Goal: a user question returns ranked, relevant source passages.
 
 Goal: grounded answers with enforced citations — the core product contract.
 
-- [ ] `assistant/instructions.md` — product contract (cite everything, refuse to invent, no stock picks)
-- [ ] PydanticAI agent with typed deps (`DocumentAgentDeps`) and output (`GroundedAnswer`)
-- [ ] Agent tools: `search_filings`, `read_chunk`, `read_surrounding_chunks`
-- [ ] `chat/orchestrator.py` — one turn: retrieve → agent → validate → stream → persist
-- [ ] `grounding/validator.py` — every citation maps to a retrieved passage; fail closed on violation
-- [ ] `chat/streaming.py` — AI SDK-compatible stream (text deltas + citation metadata parts)
-- [ ] Persist `message_citations` linked to assistant messages
-- [ ] Unit tests: citation validation, grounding enforcement, message conversion
-- [ ] Verify against [client-brief example questions](client-brief.md#example-analyst-questions):
+- ✅ `assistant/instructions.md` — product contract (cite everything, refuse to invent, no stock picks)
+- ✅ PydanticAI agent (`assistant/agent.py`) with typed deps (`DocumentAgentDeps`) and output (`GroundedAnswer`: answer, `[n]` citations, `insufficient_evidence`)
+- ✅ Agent tools: `search_filings`, `read_chunk`, `read_surrounding_chunks`; every returned passage is recorded in `deps.retrieved`, the allow-list for citations
+- ✅ `chat/orchestrator.py` — one turn: agent (retrieve → answer → validate, one corrective retry) → verified answer; fails closed with a fixed message
+- ✅ `grounding/validator.py` — every citation maps to a retrieved passage, quotes appear verbatim in the chunk, markers match the text; runs as the agent's output validator
+- ✅ `chat/streaming.py` — AI SDK-compatible stream (text deltas + `data-citation` parts). The verified answer is streamed after validation, not token by token
+- ✅ Persist `message_citations` linked to assistant messages (admin client: users have read-only RLS on that table); citation parts are also stored in the message's `parts`
+- ✅ Unit tests: citation validation, grounding enforcement (fake models), message conversion, streaming, routes (`tests/grounding/`, `tests/assistant/`, `tests/chat/`)
+- [ ] Verify against [client-brief example questions](client-brief.md#example-analyst-questions) (needs a live run: embedding quota plus the free chat model's tool calling, neither tested yet; `page` is empty, so "pages" means filing and section):
   - [ ] Answers cite specific filings and pages
   - [ ] Under-specified questions get "not enough evidence" responses
   - [ ] Question 10 (generative AI margins) refuses to infer beyond filings

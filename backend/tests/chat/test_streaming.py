@@ -33,3 +33,41 @@ def test_sse_framing():
     framed = sse({"type": "finish"})
     assert framed.startswith("data: ") and framed.endswith("\n\n")
     assert json.loads(framed[6:]) == {"type": "finish"}
+
+
+def test_data_parts_follow_text_and_message_id_is_used():
+    async def deltas():
+        yield "a"
+
+    async def collect():
+        return [
+            event
+            async for event in ui_message_stream(
+                deltas(),
+                message_id="m-1",
+                data_parts=[{"type": "data-citation", "id": "1"}],
+            )
+        ]
+
+    events = asyncio.run(collect())
+
+    assert [e["type"] for e in events[:-1]] == [
+        "start",
+        "text-start",
+        "text-delta",
+        "text-end",
+        "data-citation",
+        "finish",
+    ]
+    assert events[0]["messageId"] == "m-1"
+
+
+def test_word_deltas_preserve_text_exactly():
+    from app.chat.streaming import word_deltas
+
+    text = "First line [1].\n\n- item two\n"
+
+    async def collect():
+        return [delta async for delta in word_deltas(text)]
+
+    assert "".join(asyncio.run(collect())) == text

@@ -3,15 +3,37 @@ from uuid import UUID
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic_ai.exceptions import ModelHTTPError
 
 from app.api import chat
+from app.assistant.outputs import VerifiedAnswer, VerifiedCitation
 from app.auth.dependencies import CurrentUser, get_current_user
 
 USER_ID = UUID("5f0c1b7e-3a52-4c1e-9a43-0d6f4f3b8a11")
 OTHER_ID = UUID("9a1d2c3e-1111-4222-8333-444455556666")
 THREAD_ID = "0b7a5c1e-2f3d-4a5b-8c9d-1e2f3a4b5c6d"
 
+CHUNK_ID = UUID("7c9e6679-7425-40de-944b-e07fc1f90ae7")
+ANSWER = VerifiedAnswer(
+    text="Services grew to $96.2 billion [1].",
+    citations=[
+        VerifiedCitation(
+            marker=1,
+            chunk_id=CHUNK_ID,
+            quote="Services net sales were $96.2 billion",
+            excerpt="Services net sales were $96.2 billion in 2025.",
+            ticker="AAPL",
+            form_type="10-K",
+            fiscal_year=2025,
+            filing_date="2025-10-31",
+            section="Item 7.",
+            page=None,
+        )
+    ],
+)
+
 app = FastAPI()
+app.state.engine = object()
 app.include_router(chat.router)
 app.dependency_overrides[get_current_user] = lambda: CurrentUser(
     id=USER_ID, email="analyst@example.com", access_token="token"
@@ -21,7 +43,15 @@ client = TestClient(app, raise_server_exceptions=False)
 
 @pytest.fixture(autouse=True)
 def fake_db(monkeypatch):
-    state = {"thread_owner": USER_ID, "title": None, "saved": [], "messages": []}
+    state = {
+        "thread_owner": USER_ID,
+        "title": None,
+        "saved": [],
+        "citations": [],
+        "messages": [],
+        "answer": ANSWER,
+        "turn": None,
+    }
 
     async def client_factory(*_):
         return object()
@@ -37,6 +67,16 @@ def fake_db(monkeypatch):
 
     async def save_turn(*args):
         state["saved"].append(args[1:])
+        return "assistant-msg-1"
+
+    async def save_citations(_, message_id, citations):
+        state["citations"].append((message_id, citations))
+
+    async def fake_run_turn(retriever, **kwargs):
+        state["turn"] = kwargs
+        if isinstance(state["answer"], Exception):
+            raise state["answer"]
+        return state["answer"]
 
     async def list_messages(_, __):
         return state["messages"]
@@ -45,6 +85,8 @@ def fake_db(monkeypatch):
     monkeypatch.setattr(chat, "create_user_client", client_factory)
     monkeypatch.setattr(chat.chats, "get_thread", get_thread)
     monkeypatch.setattr(chat.chats, "save_turn", save_turn)
+    monkeypatch.setattr(chat.chats, "save_citations", save_citations)
+    monkeypatch.setattr(chat, "run_turn", fake_run_turn)
     monkeypatch.setattr(chat.chats, "list_messages", list_messages)
     return state
 
@@ -61,12 +103,35 @@ def test_stream_emits_events_and_persists_turn(fake_db):
     assert response.headers["x-vercel-ai-ui-message-stream"] == "v1"
     assert response.text.rstrip().endswith("data: [DONE]")
     assert '"type":"text-delta"' in response.text
+    assert '"messageId":"assistant-msg-1"' in response.text
     [(thread_id, user_text, _, answer, answer_parts, title)] = fake_db["saved"]
     assert str(thread_id) == THREAD_ID
     assert user_text == "Hello?"
-    assert answer.startswith("This is a stubbed response.")
-    assert answer_parts == [{"type": "text", "text": answer}]
+    assert answer == ANSWER.text
+    assert answer_parts[0] == {"type": "text", "text": ANSWER.text}
     assert title == "Hello?"
+    assert fake_db["turn"]["question"] == "Hello?"
+    assert fake_db["turn"]["user_id"] == USER_ID
+
+
+def test_citations_are_streamed_and_persisted(fake_db):
+    response = client.post("/chat/stream", json=stream_body())
+
+    assert '"type":"data-citation"' in response.text
+    assert response.text.index("data-citation") > response.text.index("text-end")
+    [(_, _, _, _, answer_parts, _)] = fake_db["saved"]
+    assert answer_parts[1]["type"] == "data-citation"
+    assert answer_parts[1]["data"]["chunk_id"] == str(CHUNK_ID)
+    assert fake_db["citations"] == [("assistant-msg-1", ANSWER.citations)]
+
+
+def test_model_failure_is_502_and_nothing_saved(fake_db):
+    fake_db["answer"] = ModelHTTPError(429, "test-model", "rate limited")
+
+    response = client.post("/chat/stream", json=stream_body())
+
+    assert response.status_code == 502
+    assert fake_db["saved"] == []
 
 
 def test_title_not_overwritten_after_first_turn(fake_db):

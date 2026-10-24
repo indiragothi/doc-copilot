@@ -4,6 +4,8 @@ from uuid import UUID
 
 from supabase import AsyncClient
 
+from app.assistant.outputs import VerifiedCitation
+
 Row = dict[str, Any]
 
 
@@ -64,13 +66,16 @@ async def save_turn(
     assistant_text: str,
     assistant_parts: list[Any],
     title: str | None,
-) -> None:
-    """Store both sides of a finished turn. `title` is set only for a thread's first turn."""
+) -> str:
+    """Store both sides of a finished turn and return the assistant message id.
+
+    `title` is set only for a thread's first turn.
+    """
     thread = str(thread_id)
     # Explicit timestamps keep the user message ordered before the reply.
     user_at = datetime.now(UTC)
     assistant_at = datetime.now(UTC)
-    await (
+    inserted = await (
         client.table("chat_messages")
         .insert(
             [
@@ -96,3 +101,27 @@ async def save_turn(
     if title is not None:
         update["title"] = title
     await client.table("chat_threads").update(update).eq("id", thread).execute()
+    return next(row["id"] for row in inserted.data if row["role"] == "assistant")
+
+
+async def save_citations(
+    admin: AsyncClient, message_id: str, citations: list[VerifiedCitation]
+) -> None:
+    """Admin write: `message_citations` is read-only for users under RLS."""
+    if not citations:
+        return
+    await (
+        admin.table("message_citations")
+        .insert(
+            [
+                {
+                    "message_id": message_id,
+                    "chunk_id": str(citation.chunk_id),
+                    "position": citation.marker,
+                    "excerpt": citation.excerpt,
+                }
+                for citation in citations
+            ]
+        )
+        .execute()
+    )

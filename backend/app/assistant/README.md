@@ -4,7 +4,7 @@ How an analyst question turns into a cited, verified answer. Retrieval finds can
 
 The chat layer ([../chat/orchestrator.py](../chat/orchestrator.py) `run_turn`) calls this pipeline once per question. What it does with the result (saving, streaming) is outside this document.
 
-> **Status:** built, unit-tested with scripted fake models, and run live against Gemini (`gemini-3.1-flash-lite`) on the Apple corpus; see [Smoke tests](#smoke-tests) for what has been checked.
+> **Status:** built, unit-tested with scripted fake models, and run live against Gemini (`gemini-3.1-flash-lite`) on the five-company corpus; see [Smoke tests](#smoke-tests) for what has been checked.
 
 ## Full pipeline
 
@@ -153,7 +153,7 @@ Question: *How did Apple's Services revenue change in FY2025?*
 4. The validator finds the `chunk_id` in `deps.retrieved`, the quote inside the passage text, and `[1]` matching citation 1. No violations.
 5. `run_turn` joins the citation with its passage (ticker, form type, fiscal year, filing date, section, excerpt) and returns the `VerifiedAnswer`.
 
-For *"Compare AWS operating income for Amazon"* on an Apple-only corpus, `search_filings` with `ticker="AMZN"` returns an empty list, the model sets `insufficient_evidence` and says the filings do not cover Amazon, and the validator accepts it because it has no citations.
+For *"What was Tesla's total revenue in 2024?"* about a company that is not in the corpus (say Tesla), `search_filings` with `ticker="TSLA"` returns an empty list, the model sets `insufficient_evidence` and says the filings do not cover Tesla, and the validator accepts it because it has no citations.
 
 ## Logging
 
@@ -189,7 +189,7 @@ uv run python -m scripts.smoke_retrieval
 uv run python -m scripts.smoke_assistant apple-mix
 ```
 
-`smoke_assistant` takes a query key: `apple-mix`, `apple-suppliers`, `amazon-aws` (expect "not enough evidence", since only Apple is ingested), `q10-refusal` and `underspecified` (expect a clarifying question, no search). On Windows set `PYTHONUTF8=1` so the answer prints. It runs the same `run_turn` the chat endpoint uses and prints the answer, whether it was grounded, and each citation with its quote and excerpt.
+`smoke_assistant` takes a query key: `apple-mix`, `apple-suppliers`, `amazon-aws`, `tesla-revenue` (expect "not enough evidence": Tesla is not in the corpus), `q10-refusal` and `underspecified` (expect a clarifying question, no search). On Windows set `PYTHONUTF8=1` so the answer prints. It runs the same `run_turn` the chat endpoint uses and prints the answer, whether it was grounded, and each citation with its quote and excerpt.
 
 ## Tests
 

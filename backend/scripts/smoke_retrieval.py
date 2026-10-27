@@ -9,7 +9,6 @@ import asyncio
 from app.retrieval.cli import run
 from app.retrieval.models import SearchFilters
 
-# Apple only: it is the one company ingested in this build.
 SMOKE_QUERIES: list[tuple[str, SearchFilters]] = [
     (
         "How did Apple's revenue mix between iPhone, Services, Mac, iPad and Wearables change?",
@@ -23,6 +22,23 @@ SMOKE_QUERIES: list[tuple[str, SearchFilters]] = [
         "Geographic revenue exposure by segment",
         SearchFilters(ticker="AAPL", form_type="10-K", fiscal_year=2025),
     ),
+    (
+        "Azure and cloud revenue growth",
+        SearchFilters(ticker="MSFT", form_type="10-K"),
+    ),
+    (
+        "Data center revenue and customer concentration",
+        SearchFilters(ticker="NVDA", form_type="10-K"),
+    ),
+    (
+        "AWS segment operating income",
+        SearchFilters(ticker="AMZN", form_type="10-K"),
+    ),
+    (
+        "Google Cloud revenue and operating income",
+        SearchFilters(ticker="GOOGL", form_type="10-K"),
+    ),
+    ("Which companies describe export control risks for AI chips?", SearchFilters()),
 ]
 TOP_K = 5
 

@@ -102,23 +102,24 @@ Goal: end-to-end chat UI streaming from FastAPI, no real retrieval yet.
 
 Goal: SEC filings in the corpus are parsed, chunked, embedded, and stored in Supabase.
 
-**Scope decision:** this build is Apple-only (5 filings, FY2021–2025). The OpenRouter free tier allowed only 50 embedding requests a day, and the other four companies are not needed for the demo. Embeddings now come from NVIDIA's own API (limits not yet measured on the full corpus). Their files stay in `data/`; to add them, run `uv run python -m ingest.load_documents` and then `uv run python -m ingest.load_chunks` (resumable).
+**Scope:** all five companies, 25 filings, FY2021–2025. Apple was loaded first while the OpenRouter free tier (50 embedding requests a day) was the limit; after the move to NVIDIA's own API the other four were loaded in one session with no quota problem. To add or refresh filings, run `uv run python -m ingest.load_documents` and then `uv run python -m ingest.load_chunks` (resumable; do not run two at once).
 
 Flow: `data/download.py` → `data/convert_to_markdown.py` (HTML → Markdown + Docling JSON) → `ingest.load_documents` (`source_documents`) → `ingest.load_chunks` (chunk, embed, `document_chunks`).
 
 - ✅ `data/convert_to_markdown.py` — Docling converts every filing to Markdown (`data/markdown/`) and Docling JSON (`data/docling/`), same year folders and manifest
 - ✅ Audit conversion: tables and narrative text spot-checked against the source HTML (no data loss; see known gaps below)
-- ✅ `ingest/load_documents.py` — `source_documents` rows with filing metadata + full Markdown (idempotent; loaded 25, kept Apple's 5)
+- ✅ `ingest/load_documents.py` — `source_documents` rows with filing metadata + full Markdown (idempotent; all 25 filings)
 - ✅ `ingest/chunking.py` — Docling `HybridChunker`, 512-token cap, compact table rows, "Item N." section headings
-- ✅ `ingest/embeddings.py` — NVIDIA `nvidia/nemotron-3.5-embed-1b`, 1024 dims requested from the API, `input_type` `passage` for chunks (searches use `query`). The earlier 8B model was unavailable, so all 714 Apple chunks were deleted and re-embedded
+- ✅ `ingest/embeddings.py` — NVIDIA `nvidia/nemotron-3.5-embed-1b`, 1024 dims requested from the API, `input_type` `passage` for chunks (searches use `query`). The earlier 8B model was unavailable, so the 714 Apple chunks were deleted and re-embedded
 - ✅ `ingest/load_chunks.py` — `--dry-run`, `--test`, full run; per-filing transaction, idempotent re-run
 - ✅ Generated `tsvector` populated for full-text search (verified on the test chunk)
 - ✅ Unit tests: chunking, table rows, section headings, embedding dimension handling (`tests/ingest/`)
 - ✅ Dry run: 4,530 chunks / ~1.84M tokens / 284 embedding requests across 25 filings
 - ✅ One-chunk test: Apple FY2025 revenue table stored, 1024 dims, similarity 0.615 (relevant) vs 0.027 (unrelated)
-- ✅ Run ingestion on the Apple corpus: 5 filings, 714 chunks, all with 1024-dim embeddings
+- ✅ Run ingestion on the Apple corpus first: 5 filings, 714 chunks, all with 1024-dim embeddings
 - ✅ Verify: chunk counts match the dry run; Apple revenue table found by full-text and vector search
-- ✅ Removed the 20 non-Apple `source_documents` rows (no chunks); MSFT, NVDA, AMZN and GOOGL ingestion deferred
+- ✅ Ingested MSFT (995 chunks), NVDA (960), AMZN (864) and GOOGL (997): 25 filings, 4,530 chunks in total, all 1024-dim with a populated `search_vector`; a re-run skips every filing
+- ✅ Verify: `scripts.smoke_retrieval` returns the right chunks for each of the five tickers and for an unfiltered cross-company question (export controls → NVIDIA risk factors)
 
 Known gaps: `page` is empty (the HTML has no page numbers; page footers remain as text lines); only Item-level sections are captured, not sub-headings.
 
@@ -161,7 +162,7 @@ Goal: grounded answers with enforced citations — the core product contract.
   - ✅ Question 10 (generative AI margins) refuses to infer beyond filings
 - ✅ Chat model moved from OpenRouter to Gemini (native Google client, 5 retries on 503) after the NVIDIA-hosted models were slow (88 s to 15 min per answer, mostly reasoning tokens) or ignored the citation format
 - ✅ Search passages shortened to 800 characters; the validator also checks exact figures against the cited chunks, accepts `...` in quotes and typographic quote variants, and rejects `[1, 2]`
-- [ ] Known gaps: no LLM judge (claims are not checked against their quotes beyond figures); the model's own arithmetic is unchecked; answers take 20 s to 3 min depending on Gemini free-tier load; only Apple is ingested
+- [ ] Known gaps: no LLM judge (claims are not checked against their quotes beyond figures); the model's own arithmetic is unchecked; answers took 4–16 s in the browser check but can take up to 3 min under Gemini free-tier load
 
 ---
 
@@ -174,7 +175,9 @@ Goal: analysts can verify every claim in one click — this is what makes the pr
 - ✅ Empty states (no threads, no corpus match)
 - ✅ Error states (auth expired, retrieval failure, grounding failure, network/CORS)
 - ✅ Loading/streaming status during assistant run
-- [ ] Verify: click a citation → see the exact passage from the filing
+- ✅ Assistant answers render as Markdown (tables, bold, lists) via `react-markdown` + `remark-gfm`; `[n]` chips work inside tables
+- ✅ Sidebar is a drawer on small screens
+- ✅ Verify in the browser: click a citation → see the exact passage from the filing with the quote highlighted; vague and out-of-corpus questions get a clarifying question or a refusal; mobile width works
 
 ---
 
@@ -187,7 +190,7 @@ Goal: 5 senior analysts can use it for a week and report ≥3 hours saved per an
 - [ ] Smoke-test all 10 example questions from the client brief
 - [ ] Confirm chat history persists across sessions
 - [ ] Confirm ~40-user scale assumptions (no hardcoded single-user shortcuts)
-- [ ] Basic structured logging on backend (`structlog`) for debugging failed turns
+- [x] Basic structured logging on backend (`structlog`): `tool_finished`, `turn_complete`, `grounding_failed`
 - [ ] Review latency: streaming starts within a few seconds for typical queries
 
 ---

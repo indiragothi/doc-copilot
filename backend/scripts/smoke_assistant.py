@@ -24,11 +24,12 @@ QUERIES = {
         "What do Apple's filings say about supplier concentration or dependence on "
         "third-party manufacturing, and did the wording become more or less urgent?"
     ),
-    # Only Apple is ingested, so this must come back as "not enough evidence".
     "amazon-aws": (
         "For Amazon, compare AWS operating income and margin against North America "
         "and International from 2021-2025."
     ),
+    # Tesla is not in the corpus, so this must come back as "not enough evidence".
+    "tesla-revenue": "What was Tesla's total revenue in 2024?",
     "q10-refusal": (
         "Do the filings prove that generative AI improved margins for any of these "
         "companies?"

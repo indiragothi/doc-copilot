@@ -66,5 +66,5 @@ uv run data/download.py
 ```
 
 By default this downloads the latest 5 10-K filings for AAPL, MSFT, NVDA, AMZN, and GOOGL into year folders under `data/downloads/` and writes a `manifest.json`.
-`data/convert_to_markdown.py` then converts them to Markdown and Docling JSON, and the `backend/ingest/` scripts load them into Supabase. The current build ingests Apple only (see `docs/todos.md`).
+`data/convert_to_markdown.py` then converts them to Markdown and Docling JSON, and the `backend/ingest/` scripts load them into Supabase. The current build ingests all 25 filings: Apple, Microsoft, NVIDIA, Amazon and Alphabet, FY2021–2025 (4,530 chunks).
 Downloaded files are gitignored; the `data/` folder itself stays in git for the script and notes.

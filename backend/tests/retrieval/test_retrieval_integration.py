@@ -1,4 +1,4 @@
-"""Real queries against the ingested Apple corpus. Each case spends one embedding request."""
+"""Real queries against the ingested corpus. Each case spends one embedding request."""
 
 import asyncio
 
@@ -10,7 +10,7 @@ from app.retrieval.retriever import DocumentRetriever
 
 pytestmark = pytest.mark.integration
 
-# Client-brief questions the Apple-only corpus can answer, with words the top passages must show.
+# Client-brief questions about Apple, with words the top passages must show.
 CASES = [
     (
         "How did the revenue mix between iPhone, Services, Mac, iPad, and Wearables change?",

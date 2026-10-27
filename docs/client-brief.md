@@ -46,7 +46,7 @@ An internal chatbot — call it **Document Copilot** — where any Driftwood ana
 
 The current sample corpus contains 10-K filings for Apple, Amazon, Alphabet, Microsoft, and NVIDIA across fiscal years 2021–2025. The bot should be able to handle questions like these with cited answers and underlying passages:
 
-> **Current build scope: Apple only.** This is a demo build, so only Apple's five 10-Ks (FY2021–2025) are embedded. Questions 1 and 10 can be answered in full; 6, 7 and 9 only for Apple. Questions 2, 3, 4, 5 and 8 need other companies and should get a "not enough evidence in the available filings" answer. The other filings are downloaded and converted in `data/`, and can be added by re-running the ingestion scripts.
+> **Current build scope: all five companies.** All 25 10-Ks (Apple, Microsoft, NVIDIA, Amazon, Alphabet; FY2021–2025) are embedded, so every question below is in scope. `page` is empty, so "pages" means filing and section.
 
 1. Across Apple's 2021–2025 10-Ks, how did the revenue mix between iPhone, Services, Mac, iPad, and Wearables change, and which category appears to have contributed most to any mix shift?
 2. For Amazon, compare AWS operating income and margin against North America and International from 2021–2025. In which years did AWS appear to fund losses or weaker profitability elsewhere?

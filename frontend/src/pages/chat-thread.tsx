@@ -1,12 +1,12 @@
-import type { UIMessage } from "ai"
 import { useEffect, useState } from "react"
 import { useOutletContext, useParams } from "react-router-dom"
 
 import { ChatView } from "@/components/chat/chat-view"
+import type { ChatMessage } from "@/lib/chat-types"
 import { getThreadMessages } from "@/lib/threads"
 import type { ChatLayoutContext } from "@/pages/chat-layout"
 
-type Loaded = { threadId: string; messages: UIMessage[] } | { threadId: string; error: string }
+type Loaded = { threadId: string; messages: ChatMessage[] } | { threadId: string; error: string }
 
 export default function ChatThreadPage() {
   const { threadId } = useParams<{ threadId: string }>()

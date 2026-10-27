@@ -24,7 +24,7 @@ flowchart LR
         db[(Postgres<br/>chats, documents, chunks<br/>pgvector + full-text)]
     end
 
-    llm[OpenRouter<br/>NVIDIA Nemotron LLM + embeddings]
+    llm[Gemini LLM<br/>+ NVIDIA embeddings]
     corpus[SEC filing corpus]
     ingestion[Ingestion pipeline<br/>download, parse, chunk, embed]
 
@@ -67,7 +67,7 @@ Backend:
 - FastAPI + Uvicorn
 - Pydantic v2 + pydantic-settings
 - PydanticAI for typed LLM orchestration
-- OpenAI SDK pointed at OpenRouter (NVIDIA Nemotron models) for generation and embeddings
+- PydanticAI's Google client (Gemini, retried on 503) for generation; OpenAI SDK pointed at NVIDIA's API for embeddings (`input_type` `query` for searches, `passage` for chunks)
 - Supabase Python client for server-side database access
 - SQLAlchemy models + Alembic migrations for schema management
 - Supabase `pgvector` for semantic search
@@ -331,7 +331,9 @@ The backend should enforce these invariants:
 - Every citation maps to a retrieved source passage.
 - Cited passages include enough metadata for the frontend to show company, filing, date, page or section, and excerpt.
 - The model cannot cite documents that were not retrieved for the current request.
-- Every citation quote appears verbatim (ignoring whitespace) in the cited chunk's text, and every `[n]` marker in the answer has exactly one citation and the reverse.
+- Every citation quote appears verbatim in the cited chunk's text. Whitespace, typographic quotes and dashes are ignored, and `...` may mark skipped text as long as each part is verbatim. Every `[n]` marker in the answer has exactly one citation and the reverse; each marker has its own brackets (`[1][2]`, not `[1, 2]`).
+- Exact figures (such as `109,158`) written next to a marker appear in a chunk that marker cites, or are a difference or sum of such figures. Segments that say they are a calculation, rounded values and years are not checked.
+- Search results show the first 800 characters of each passage; the quote is still checked against the full chunk.
 - If citation validation fails, the backend returns a controlled failure instead of a polished unsupported answer.
 
 This policy should be covered by backend unit tests around retrieval, citation extraction, and grounding enforcement.
@@ -365,7 +367,8 @@ Backend settings:
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `DATABASE_URL` for Alembic and direct Postgres access
-- `OPENROUTER_API_KEY`
+- `GEMINI_API_KEY`
+- `NVIDIA_API_KEY`
 - `ALLOWED_ORIGINS`
 - `LLM_MODEL`
 - `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` (1024)

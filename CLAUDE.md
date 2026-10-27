@@ -11,7 +11,8 @@ This file is the source of truth for any coding agent (Claude Code, Cursor, Code
 - **Retrieval:** Supabase `pgvector` + Postgres full-text search
 - **Auth:** Supabase Auth
 - **Hosting:** Railway (backend service + frontend service)
-- **LLM + embeddings:** OpenRouter's NVIDIA Nemotron models (chat: `nvidia/nemotron-3.5-super-vl:free`, embeddings: `nvidia/nemotron-3.5-embed-8b:free`, 1024 dims), called through the OpenAI-compatible API. Switched from OpenAI because its payments aren't available in India.
+- **LLM:** Google Gemini on the free tier (`gemini-3.1-flash-lite`), through PydanticAI's native Google client.
+- **Embeddings:** NVIDIA `nvidia/nemotron-3.5-embed-1b` (1024 dims, asymmetric: `input_type` is `query` or `passage`), through NVIDIA's OpenAI-compatible API. Switched from OpenAI because its payments aren't available in India, then from OpenRouter because its free NVIDIA models were repeatedly unavailable (HTTP 504) and too slow.
 
 Stack is locked unless explicitly changed. Don't propose alternatives without a stated reason.
 
@@ -34,7 +35,7 @@ document-copilot/
 OK to depend on:
 
 - Things that are genuinely hard to get right (HTTP clients, ASGI servers, SQL drivers, parsers, LLM SDKs, ORM, migrations, auth SDKs).
-- The declared stack (FastAPI, React, Vite, Supabase clients, OpenAI SDK for the OpenRouter API, etc.).
+- The declared stack (FastAPI, React, Vite, Supabase clients, OpenAI SDK for NVIDIA's embeddings API, `google-genai` via PydanticAI for Gemini, etc.).
 
 Not OK:
 

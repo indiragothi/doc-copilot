@@ -1,6 +1,5 @@
-import type { UIMessage } from "ai"
-
 import { api } from "@/lib/api"
+import type { ChatMessage } from "@/lib/chat-types"
 
 export type Thread = {
   id: string
@@ -14,4 +13,4 @@ export const listThreads = () => api.get<Thread[]>("/chat/threads")
 export const createThread = () => api.post<Thread>("/chat/threads")
 
 export const getThreadMessages = (threadId: string) =>
-  api.get<UIMessage[]>(`/chat/threads/${threadId}/messages`)
+  api.get<ChatMessage[]>(`/chat/threads/${threadId}/messages`)

@@ -21,7 +21,7 @@ The critical path is **data model → ingestion → retrieval → LLM → citati
 
 - ✅ Install toolchain: Python 3.12+, `uv`, Node 20+, `pnpm` (see [README](../README.md))
 - ✅ Create Supabase project and collect credentials ([supabase-setup](guides/supabase-setup.md))
-- ✅ Create OpenRouter API key (needed from Phase 4 onward; free NVIDIA models)
+- ✅ Create API keys: NVIDIA (embeddings) and Gemini (chat), both free and card-free. OpenRouter was dropped because its free NVIDIA models were unavailable (504) and slow
 - ✅ Set `USER_AGENT` in `data/download.py` and download sample 10-K corpus:
   ```bash
   uv run data/download.py
@@ -102,7 +102,7 @@ Goal: end-to-end chat UI streaming from FastAPI, no real retrieval yet.
 
 Goal: SEC filings in the corpus are parsed, chunked, embedded, and stored in Supabase.
 
-**Scope decision:** this build is Apple-only (5 filings, FY2021–2025). Free-tier OpenRouter allows 50 embedding requests a day, and the other four companies are not needed for the demo. Their files stay in `data/`; to add them, run `uv run python -m ingest.load_documents` and then `uv run python -m ingest.load_chunks` (resumable).
+**Scope decision:** this build is Apple-only (5 filings, FY2021–2025). The OpenRouter free tier allowed only 50 embedding requests a day, and the other four companies are not needed for the demo. Embeddings now come from NVIDIA's own API (limits not yet measured on the full corpus). Their files stay in `data/`; to add them, run `uv run python -m ingest.load_documents` and then `uv run python -m ingest.load_chunks` (resumable).
 
 Flow: `data/download.py` → `data/convert_to_markdown.py` (HTML → Markdown + Docling JSON) → `ingest.load_documents` (`source_documents`) → `ingest.load_chunks` (chunk, embed, `document_chunks`).
 
@@ -110,7 +110,7 @@ Flow: `data/download.py` → `data/convert_to_markdown.py` (HTML → Markdown + 
 - ✅ Audit conversion: tables and narrative text spot-checked against the source HTML (no data loss; see known gaps below)
 - ✅ `ingest/load_documents.py` — `source_documents` rows with filing metadata + full Markdown (idempotent; loaded 25, kept Apple's 5)
 - ✅ `ingest/chunking.py` — Docling `HybridChunker`, 512-token cap, compact table rows, "Item N." section headings
-- ✅ `ingest/embeddings.py` — OpenRouter `nvidia/nemotron-3.5-embed-8b:free`, 1024 dims (truncate + re-normalize if the API returns more)
+- ✅ `ingest/embeddings.py` — NVIDIA `nvidia/nemotron-3.5-embed-1b`, 1024 dims requested from the API, `input_type` `passage` for chunks (searches use `query`). The earlier 8B model was unavailable, so all 714 Apple chunks were deleted and re-embedded
 - ✅ `ingest/load_chunks.py` — `--dry-run`, `--test`, full run; per-filing transaction, idempotent re-run
 - ✅ Generated `tsvector` populated for full-text search (verified on the test chunk)
 - ✅ Unit tests: chunking, table rows, section headings, embedding dimension handling (`tests/ingest/`)
@@ -133,8 +133,8 @@ Goal: a user question returns ranked, relevant source passages.
 - ✅ `retrieval/fusion.py` — Reciprocal Rank Fusion in Python
 - ✅ `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
 - ✅ Unit tests: fusion ranking, query assembly (mock DB)
-- ✅ Integration test (`@pytest.mark.integration`): real query against ingested corpus (written; not yet run — OpenRouter free embedding quota hit)
-- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (DB path checked with a stored vector; needs a live embedding run once the embedding model is available again: `uv run python -m scripts.smoke_retrieval`, or `uv run python -m app.retrieval.cli "..." --ticker AAPL`. Last attempt hit a 504 from OpenRouter, model unavailable)
+- ✅ Integration test (`@pytest.mark.integration`): real query against ingested corpus (written; not yet run)
+- ✅ Verify: `scripts.smoke_retrieval` on the re-embedded Apple corpus returns the right chunks (revenue-mix table in Item 7, manufacturing-concentration risk factor in Item 1A, FY2025 segment note in Item 8)
 
 ---
 
@@ -155,10 +155,13 @@ Goal: grounded answers with enforced citations — the core product contract.
 - ✅ Batch `read_chunks` tool and tool-usage rules in the instructions (fewer model rounds)
 - ✅ Per-tool timing and per-turn token usage in structlog events (`assistant/progress.py`, `turn_complete`)
 - ✅ Smoke scripts: `scripts/smoke_retrieval.py` (Phase 5 check) and `scripts/smoke_assistant.py <query-key>` (Phase 6 check; keys: apple-mix, apple-suppliers, amazon-aws, q10-refusal, underspecified)
-- [ ] Verify against [client-brief example questions](client-brief.md#example-analyst-questions) (needs a live run: embedding quota plus the free chat model's tool calling, neither tested yet; `page` is empty, so "pages" means filing and section):
-  - [ ] Answers cite specific filings and pages
-  - [ ] Under-specified questions get "not enough evidence" responses
-  - [ ] Question 10 (generative AI margins) refuses to infer beyond filings
+- ✅ Verify against [client-brief example questions](client-brief.md#example-analyst-questions) on Gemini `gemini-3.1-flash-lite` (`page` is empty, so "pages" means filing and section). Live smoke runs: `apple-mix` and `apple-suppliers` grounded with citations; `amazon-aws` and `q10-refusal` get correct "filings do not support this" answers; `underspecified` asks which company
+  - ✅ Answers cite specific filings and sections
+  - ✅ Under-specified questions get a clarifying question instead of a guess
+  - ✅ Question 10 (generative AI margins) refuses to infer beyond filings
+- ✅ Chat model moved from OpenRouter to Gemini (native Google client, 5 retries on 503) after the NVIDIA-hosted models were slow (88 s to 15 min per answer, mostly reasoning tokens) or ignored the citation format
+- ✅ Search passages shortened to 800 characters; the validator also checks exact figures against the cited chunks, accepts `...` in quotes and typographic quote variants, and rejects `[1, 2]`
+- [ ] Known gaps: no LLM judge (claims are not checked against their quotes beyond figures); the model's own arithmetic is unchecked; answers take 20 s to 3 min depending on Gemini free-tier load; only Apple is ingested
 
 ---
 
@@ -166,11 +169,11 @@ Goal: grounded answers with enforced citations — the core product contract.
 
 Goal: analysts can verify every claim in one click — this is what makes the product usable.
 
-- [ ] Citation chips/links on assistant messages (company, filing type, date, page/section)
-- [ ] Source passage panel — show underlying excerpt for selected citation
-- [ ] Empty states (no threads, no corpus match)
-- [ ] Error states (auth expired, retrieval failure, grounding failure, network/CORS)
-- [ ] Loading/streaming status during assistant run
+- ✅ Citation chips/links on assistant messages (company, filing type, date, page/section)
+- ✅ Source passage panel — show underlying excerpt for selected citation
+- ✅ Empty states (no threads, no corpus match)
+- ✅ Error states (auth expired, retrieval failure, grounding failure, network/CORS)
+- ✅ Loading/streaming status during assistant run
 - [ ] Verify: click a citation → see the exact passage from the filing
 
 ---

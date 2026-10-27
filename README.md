@@ -19,7 +19,8 @@ Full brief: [docs/client-brief.md](docs/client-brief.md)
 | Retrieval          | Supabase `pgvector` + Postgres full-text search      |
 | Auth               | Supabase Auth (email only)                           |
 | Hosting            | Railway                                              |
-| LLM + embeddings   | OpenRouter (NVIDIA Nemotron models)                  |
+| LLM                | Google Gemini (free tier)                            |
+| Embeddings         | NVIDIA Nemotron embed 1B (OpenAI-compatible API)     |
 
 ## Repo layout
 
@@ -45,7 +46,7 @@ Install these before setting up `backend/` or `frontend/`:
 | [Node.js](https://nodejs.org/) | 20+ (LTS) | Frontend toolchain | nodejs.org or `nvm install --lts` |
 | [pnpm](https://pnpm.io/installation) | latest | Frontend package manager | `corepack enable && corepack prepare pnpm@latest --activate` |
 
-You also need accounts/keys for external services once the app is wired up. Start with [docs/guides/supabase-setup.md](docs/guides/supabase-setup.md) (account + project), then create an [OpenRouter API key](https://openrouter.ai/keys) when the LLM layer is wired up. The project uses OpenRouter's free NVIDIA models: `nvidia/nemotron-3.5-super-vl:free` for chat and `nvidia/nemotron-3.5-embed-8b:free` for embeddings (1024 dimensions).
+You also need accounts/keys for external services once the app is wired up. Start with [docs/guides/supabase-setup.md](docs/guides/supabase-setup.md) (account + project), then create a [Gemini API key](https://aistudio.google.com/apikey) (`GEMINI_API_KEY`, chat model `gemini-3.1-flash-lite`) and an [NVIDIA API key](https://build.nvidia.com) (`NVIDIA_API_KEY`, embeddings `nvidia/nemotron-3.5-embed-1b`, 1024 dimensions). Both have free tiers and need no card.
 
 ## Running locally
 

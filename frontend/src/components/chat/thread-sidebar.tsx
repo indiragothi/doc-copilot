@@ -10,13 +10,33 @@ type Props = {
   threads: Thread[]
   onNewChat: () => void
   creating: boolean
+  // Below md the sidebar is a drawer: hidden until opened, closed again after a choice.
+  open: boolean
+  onClose: () => void
 }
 
-export function ThreadSidebar({ threads, onNewChat, creating }: Props) {
+export function ThreadSidebar({ threads, onNewChat, creating, open, onClose }: Props) {
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r">
+    <>
+      {open && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={onClose}
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+        />
+      )}
+      <aside
+        className={cn(
+          "w-64 shrink-0 flex-col border-r bg-background max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 md:flex",
+          open ? "flex" : "hidden",
+        )}
+      >
       <div className="p-3">
-        <Button className="w-full" onClick={onNewChat} disabled={creating}>
+        <Button className="w-full" onClick={() => {
+            onNewChat()
+            onClose()
+          }} disabled={creating}>
           <Plus /> New chat
         </Button>
       </div>
@@ -28,6 +48,7 @@ export function ThreadSidebar({ threads, onNewChat, creating }: Props) {
           <NavLink
             key={thread.id}
             to={`/chat/${thread.id}`}
+            onClick={onClose}
             className={({ isActive }) =>
               cn(
                 "block truncate rounded-md px-2 py-2 text-sm hover:bg-muted",
@@ -44,6 +65,7 @@ export function ThreadSidebar({ threads, onNewChat, creating }: Props) {
           Sign out
         </Button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

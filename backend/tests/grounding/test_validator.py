@@ -130,3 +130,118 @@ def test_duplicate_markers_are_rejected():
     violations = validate_answer(answer, {chunk.chunk_id: chunk})
 
     assert violations == ["Marker [1] is used by more than one citation."]
+
+
+def test_figure_missing_from_the_cited_chunk_is_rejected():
+    chunk = passage()
+    chunk = chunk.model_copy(update={"content": CONTENT + " Net sales were $416,161."})
+    answer = grounded(chunk, text="Services grew; net sales were $420,000 [1].")
+
+    violations = validate_answer(answer, {chunk.chunk_id: chunk})
+
+    assert len(violations) == 1
+    assert "420,000" in violations[0]
+    assert "[1]" in violations[0]
+
+
+def test_figure_present_in_the_cited_chunk_passes():
+    chunk = passage().model_copy(
+        update={"content": CONTENT + " Net sales were $416,161."}
+    )
+    answer = grounded(chunk, text="Net sales were $416161 [1].")
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_rounded_values_and_years_are_not_checked():
+    chunk = passage()
+    answer = grounded(
+        chunk, text="In 2025 Services grew to about $96.2 billion, 13% [1]."
+    )
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_segment_marked_as_a_calculation_is_not_checked():
+    chunk = passage()
+    answer = grounded(
+        chunk,
+        text="Services grew to $96.2 billion [1].\nMy calculation: +$12,345M [1].",
+    )
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_figure_may_come_from_any_chunk_the_segment_cites():
+    first = passage()
+    second = passage().model_copy(update={"content": "Net sales were $416,161."})
+    answer = GroundedAnswer(
+        answer="Net sales were $416,161 while Services grew [1][2].",
+        citations=[
+            Citation(marker=1, chunk_id=first.chunk_id, quote="Services net sales"),
+            Citation(marker=2, chunk_id=second.chunk_id, quote="Net sales were"),
+        ],
+    )
+
+    retrieved = {first.chunk_id: first, second.chunk_id: second}
+    assert validate_answer(answer, retrieved) == []
+
+
+def test_lines_without_markers_are_not_checked():
+    chunk = passage()
+    answer = grounded(chunk, text="| Services | 999,999 |\nServices grew [1].")
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_difference_of_two_cited_figures_is_accepted():
+    chunk = passage().model_copy(
+        update={"content": CONTENT + " Net sales were $416,161 and $365,817."}
+    )
+    answer = grounded(chunk, text="Net sales rose by $50,344 [1].")
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_chunk_ids_quoted_in_the_text_are_not_figures():
+    chunk = passage()
+    answer = grounded(chunk, text="Services grew [1] (chunk 2046805f).")
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_grouped_markers_get_a_specific_violation():
+    chunk = passage()
+    answer = grounded(chunk, text="Services grew [1, 2].")
+
+    violations = validate_answer(answer, {chunk.chunk_id: chunk})
+
+    assert violations == [
+        "Write each marker in its own brackets, e.g. [1][2], not [1, 2]."
+    ]
+
+
+def test_typographic_quotes_in_a_quote_still_match():
+    chunk = passage().model_copy(
+        update={"content": "Apple’s outsourcing partners — mostly in Asia."}
+    )
+    answer = grounded(
+        chunk,
+        quote="Apple's outsourcing partners - mostly in Asia.",
+        text="Apple relies on partners [1].",
+    )
+
+    assert validate_answer(answer, {chunk.chunk_id: chunk}) == []
+
+
+def test_quote_with_an_ellipsis_must_still_be_verbatim_in_each_part():
+    chunk = passage()
+    ok = grounded(
+        chunk, quote="Services net sales were $96.2 billion ... up 13% from 2024."
+    )
+    bad = grounded(
+        chunk, quote="Services net sales were $96.2 billion ... down 5% from 2024."
+    )
+
+    assert validate_answer(ok, {chunk.chunk_id: chunk}) == []
+    assert len(validate_answer(bad, {chunk.chunk_id: chunk})) == 1

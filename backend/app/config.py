@@ -19,9 +19,11 @@ class Settings(BaseSettings):
     # Direct/session connection (not the transaction pooler) — Alembic needs it.
     database_url: str
 
-    openrouter_api_key: str
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    # Chat goes to Gemini, embeddings to NVIDIA's OpenAI-compatible API.
+    gemini_api_key: str
     llm_model: str
+    nvidia_api_key: str
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     embedding_model: str
     embedding_dimensions: int
 

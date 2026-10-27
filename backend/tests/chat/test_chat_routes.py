@@ -74,6 +74,8 @@ def fake_db(monkeypatch):
 
     async def fake_run_turn(retriever, **kwargs):
         state["turn"] = kwargs
+        with kwargs["progress"].step("Searching filings", "services") as report:
+            report("Found 1 passages")
         if isinstance(state["answer"], Exception):
             raise state["answer"]
         return state["answer"]
@@ -103,7 +105,6 @@ def test_stream_emits_events_and_persists_turn(fake_db):
     assert response.headers["x-vercel-ai-ui-message-stream"] == "v1"
     assert response.text.rstrip().endswith("data: [DONE]")
     assert '"type":"text-delta"' in response.text
-    assert '"messageId":"assistant-msg-1"' in response.text
     [(thread_id, user_text, _, answer, answer_parts, title)] = fake_db["saved"]
     assert str(thread_id) == THREAD_ID
     assert user_text == "Hello?"
@@ -125,13 +126,28 @@ def test_citations_are_streamed_and_persisted(fake_db):
     assert fake_db["citations"] == [("assistant-msg-1", ANSWER.citations)]
 
 
-def test_model_failure_is_502_and_nothing_saved(fake_db):
+def test_status_steps_are_streamed_before_the_answer(fake_db):
+    response = client.post("/chat/stream", json=stream_body())
+
+    text = response.text
+    assert text.count('"type":"data-status"') == 2
+    assert '"transient":true' in text
+    assert '"state":"running"' in text and '"state":"done"' in text
+    assert text.index("data-status") < text.index("text-start")
+    assert text.index("text-start") < text.index("data-citation")
+
+
+def test_model_failure_streams_an_error_and_saves_nothing(fake_db):
     fake_db["answer"] = ModelHTTPError(429, "test-model", "rate limited")
 
     response = client.post("/chat/stream", json=stream_body())
 
-    assert response.status_code == 502
+    assert response.status_code == 200
+    assert '"type":"error"' in response.text
+    assert '"type":"text-start"' not in response.text
+    assert response.text.rstrip().endswith("data: [DONE]")
     assert fake_db["saved"] == []
+    assert fake_db["citations"] == []
 
 
 def test_title_not_overwritten_after_first_turn(fake_db):

@@ -6,6 +6,7 @@ from pydantic_ai.models.function import FunctionModel
 from test_agent import FakeRetriever, final, make_passage
 
 from app.assistant.agent import agent
+from app.assistant.progress import ProgressReporter
 from app.chat.orchestrator import FAILURE_MESSAGE, run_turn
 
 
@@ -72,3 +73,62 @@ def test_insufficient_evidence_answer_needs_no_citations():
 
     assert answer.text == "The filings do not cover Amazon."
     assert answer.citations == []
+
+
+def test_progress_reports_each_step_with_its_outcome():
+    passage = make_passage()
+    model = scripted(
+        ToolCallPart("search_filings", {"query": "services", "ticker": "aapl"}),
+        final(passage.chunk_id, "Services net sales were $96.2 billion"),
+    )
+    events = []
+
+    async def go():
+        with agent.override(model=model):
+            return await run_turn(
+                FakeRetriever([passage]),
+                user_id=uuid4(),
+                thread_id=uuid4(),
+                question="Services revenue?",
+                history=[],
+                progress=ProgressReporter(events.append),
+            )
+
+    asyncio.run(go())
+
+    assert [(e["label"], e["state"]) for e in events] == [
+        ("Searching filings", "running"),
+        ("Searching filings", "done"),
+        ("Verifying citations", "running"),
+        ("Verifying citations", "done"),
+    ]
+    assert events[0]["detail"] == "AAPL \u00b7 \u201cservices\u201d"
+    assert events[1]["detail"].startswith("Found 1 passages")
+    assert events[1]["id"] == events[0]["id"] != events[2]["id"]
+
+
+def test_failed_grounding_check_is_reported_before_the_retry():
+    passage = make_passage()
+    bad = final(uuid4(), "Services net sales were $96.2 billion")
+    model = scripted(
+        ToolCallPart("search_filings", {"query": "services"}),
+        bad,
+        final(passage.chunk_id, "Services net sales were $96.2 billion"),
+    )
+    events = []
+
+    async def go():
+        with agent.override(model=model):
+            return await run_turn(
+                FakeRetriever([passage]),
+                user_id=uuid4(),
+                thread_id=uuid4(),
+                question="Services revenue?",
+                history=[],
+                progress=ProgressReporter(events.append),
+            )
+
+    asyncio.run(go())
+
+    verify_states = [e["state"] for e in events if e["label"] == "Verifying citations"]
+    assert verify_states == ["running", "failed", "running", "done"]

@@ -8,7 +8,7 @@ Turns a question into a ranked list of source passages from the ingested filings
 
 ```mermaid
 flowchart TD
-    q[Question] --> embed["embed_query<br/>OpenRouter embedding model<br/>1024 dims"]
+    q[Question] --> embed["embed_query<br/>NVIDIA embedding model<br/>1024 dims, input_type query"]
     q --> tsq["build_tsquery<br/>lowercase words joined with OR"]
 
     subgraph db[Supabase Postgres - document_chunks]
@@ -51,7 +51,7 @@ The tuning knobs live in `app/config.py` and can be overridden with an environme
 
 | Fixed setting | Value | Where | Meaning |
 | --- | --- | --- | --- |
-| Embedding model | `settings.embedding_model` | `app/config.py` | Set in `.env`; the project uses `nvidia/nemotron-3.5-embed-8b:free`. |
+| Embedding model | `settings.embedding_model` | `app/config.py` | Set in `.env`; the project uses `nvidia/nemotron-3.5-embed-1b`, called with `input_type` `query` (chunks are embedded as `passage` at ingestion). |
 | Embedding dimensions | `settings.embedding_dimensions` | `app/config.py` | Must match the `vector(1024)` column. |
 | Embedding retries | `6` | `embeddings.py` | `max_retries` on the OpenAI client; it handles rate limits (HTTP 429) with backoff. |
 | `read_chunk` neighbor window | `0` | `DocumentRetriever.read_chunk` | Fetch one chunk by id with no context unless asked. |
@@ -71,8 +71,10 @@ The agent's tools use the settings above, with two overrides in `app/assistant/a
 ## Using the retriever
 
 ```python
-retriever = DocumentRetriever(engine)            # an AsyncEngine; `embed` can be swapped in tests
-passages = await retriever.search("supplier concentration", filters=SearchFilters(ticker="AAPL"))
+retriever = DocumentRetriever(engine)  # an AsyncEngine; `embed` can be swapped in tests
+passages = await retriever.search(
+    "supplier concentration", filters=SearchFilters(ticker="AAPL")
+)
 ```
 
 | Method | What it does |
@@ -134,4 +136,4 @@ The CLI accepts `--ticker`, `--year` and `--top-k`. `candidate_k`, `neighbor_win
 
 ## Tests
 
-`tests/retrieval/` covers fusion ranking, query assembly and the retriever with a mocked database. `test_retrieval_integration.py` is marked `integration` and needs live Supabase and OpenRouter credentials.
+`tests/retrieval/` covers fusion ranking, query assembly and the retriever with a mocked database. `test_retrieval_integration.py` is marked `integration` and needs live Supabase and NVIDIA credentials.

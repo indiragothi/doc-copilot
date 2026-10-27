@@ -35,7 +35,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-markers = ["integration: needs live Supabase and OpenRouter credentials"]
+markers = ["integration: needs live Supabase, NVIDIA and Gemini credentials"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

@@ -1,13 +1,16 @@
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai.exceptions import ModelHTTPError
 
+from app.assistant.progress import ProgressReporter
 from app.auth.dependencies import CurrentUser, get_current_user
 from app.chat.messages import (
     UIMessage,
@@ -19,10 +22,20 @@ from app.chat.messages import (
     title_from,
 )
 from app.chat.orchestrator import run_turn
-from app.chat.streaming import STREAM_HEADERS, sse, ui_message_stream, word_deltas
+from app.chat.streaming import (
+    STREAM_HEADERS,
+    answer_events,
+    error_events,
+    sse,
+    start_event,
+    status_part,
+    word_deltas,
+)
 from app.database import chats
 from app.database.supabase import create_admin_client, create_user_client
 from app.retrieval.retriever import DocumentRetriever
+
+log = structlog.get_logger()
 
 router = APIRouter(prefix="/chat")
 
@@ -90,44 +103,54 @@ async def stream(
     user_text = message_text(user_message)
     client = await create_user_client(user.access_token)
 
-    # The answer is verified in full before any of it is streamed, so run it first;
-    # upstream failures then surface as HTTP errors rather than a broken stream.
-    try:
-        answer = await run_turn(
-            DocumentRetriever(request.app.state.engine),
-            user_id=user.id,
-            thread_id=body.thread_id,
-            question=user_text,
-            history=history_for_model(
-                await chats.list_messages(client, body.thread_id)
-            ),
-        )
-    except (ModelHTTPError, APIError) as error:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, "The model service failed"
-        ) from error
-
-    parts = assistant_parts(answer.text, answer.citations)
-    message_id = await chats.save_turn(
-        client,
-        body.thread_id,
-        user_text,
-        user_message.parts,
-        answer.text,
-        parts,
-        title_from(user_text) if thread["title"] is None else None,
-    )
-    await chats.save_citations(
-        await create_admin_client(), message_id, answer.citations
-    )
-
     async def events() -> AsyncIterator[str]:
-        stream = ui_message_stream(
-            word_deltas(answer.text),
-            message_id=message_id,
-            data_parts=[citation_part(citation) for citation in answer.citations],
+        yield sse(start_event())
+        # The answer is verified in full before any of it is streamed. Meanwhile the
+        # analyst gets live status steps from the agent.
+        steps: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        turn = asyncio.create_task(
+            run_turn(
+                DocumentRetriever(request.app.state.engine),
+                user_id=user.id,
+                thread_id=body.thread_id,
+                question=user_text,
+                history=history_for_model(
+                    await chats.list_messages(client, body.thread_id)
+                ),
+                progress=ProgressReporter(steps.put_nowait),
+            )
         )
-        async for event in stream:
+        turn.add_done_callback(lambda _: steps.put_nowait(None))
+        try:
+            while (step := await steps.get()) is not None:
+                yield sse(status_part(step))
+            answer = await turn
+        except (ModelHTTPError, APIError):
+            log.warning("model_service_failed", thread_id=str(body.thread_id))
+            for event in error_events("The model service failed. Please try again."):
+                yield sse(event)
+            return
+        finally:
+            # Also runs when the client disconnects: stop spending model quota.
+            turn.cancel()
+
+        parts = assistant_parts(answer.text, answer.citations)
+        message_id = await chats.save_turn(
+            client,
+            body.thread_id,
+            user_text,
+            user_message.parts,
+            answer.text,
+            parts,
+            title_from(user_text) if thread["title"] is None else None,
+        )
+        await chats.save_citations(
+            await create_admin_client(), message_id, answer.citations
+        )
+        async for event in answer_events(
+            word_deltas(answer.text),
+            [citation_part(citation) for citation in answer.citations],
+        ):
             yield sse(event)
 
     return StreamingResponse(

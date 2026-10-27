@@ -4,7 +4,7 @@ How an analyst question turns into a cited, verified answer. Retrieval finds can
 
 The chat layer ([../chat/orchestrator.py](../chat/orchestrator.py) `run_turn`) calls this pipeline once per question. What it does with the result (saving, streaming) is outside this document.
 
-> **Status:** built and unit-tested with scripted fake models. Not yet verified against the live model; see [Smoke tests](#smoke-tests).
+> **Status:** built, unit-tested with scripted fake models, and run live against Gemini (`gemini-3.1-flash-lite`) on the Apple corpus; see [Smoke tests](#smoke-tests) for what has been checked.
 
 ## Full pipeline
 
@@ -36,7 +36,7 @@ Unlike a typical hybrid search setup, keyword search here does not use an LLM to
 
 | Setting | Value |
 | --- | --- |
-| Model | `settings.llm_model`, called through an OpenAI-compatible client pointed at OpenRouter (the `openai` classes are only the client library) |
+| Model | `settings.llm_model` (Gemini), through PydanticAI's native Google client, retried up to 5 times on HTTP 503 / 429. The OpenAI-compatible Gemini endpoint is not used: it drops the thought signatures Gemini 3 needs between tool calls |
 | Deps | `DocumentAgentDeps`: `user_id`, `thread_id`, `retriever`, `retrieved` |
 | Output | `GroundedAnswer` |
 | Instructions | `instructions.md`, loaded once at import |
@@ -56,7 +56,7 @@ Unlike a typical hybrid search setup, keyword search here does not use an LLM to
 
 | Tool | What it does | Where the data comes from |
 | --- | --- | --- |
-| `search_filings(query, ticker?, fiscal_year?, form_type?)` | Hybrid search, returns up to `retrieval_top_k` passages with no neighbor text. Ticker is upper-cased. Empty list if nothing matches. | `DocumentRetriever.search` (stage 2) |
+| `search_filings(query, ticker?, fiscal_year?, form_type?)` | Hybrid search, returns up to `retrieval_top_k` passages with no neighbor text. Each passage carries only its first 800 characters (`truncated` says so); `read_chunks` returns full text. Ticker is upper-cased. If nothing matches, a `note` tells the model the filing is not in the corpus and to answer with `insufficient_evidence`. | `DocumentRetriever.search` (stage 2) |
 | `read_chunks(chunk_ids)` | Several passages in one query, at most 10 ids. Fails the call if none exist. | `DocumentRetriever.read_chunks` |
 | `read_chunk(chunk_id)` | One passage by id. | `DocumentRetriever.read_chunk` |
 | `read_surrounding_chunks(chunk_id, window)` | A passage plus the text of the chunks around it. Window is clamped to 1 to 3. | `DocumentRetriever.read_chunk` with a neighbor window |
@@ -73,7 +73,7 @@ An unknown id raises `ModelRetry`, which tells the model "no such chunk, use an 
 
 `search_filings` calls `DocumentRetriever.search`. Full detail and defaults are in [../retrieval/README.md](../retrieval/README.md). In short:
 
-1. **Embed** the query into a 1024-dimension vector (one embedding request).
+1. **Embed** the query into a 1024-dimension vector with NVIDIA's embedding model (one request, `input_type` `query`).
 2. **Semantic search**: nearest chunks by cosine distance, `retrieval_candidate_k` (50) of them.
 3. **Keyword search**, in parallel: the question's words OR'ed into a Postgres full-text query, ranked by `ts_rank_cd`, also 50 candidates.
 4. **Fuse** the two ranked lists with Reciprocal Rank Fusion (`k` = 60). A chunk found by both searches beats a chunk found by one.
@@ -102,10 +102,11 @@ The model returns a `GroundedAnswer`:
 | 3 | Otherwise: at least one citation | no citations |
 | 4 | No marker is used twice, and markers run 1, 2, 3... without gaps | used by more than one citation / without gaps |
 | 5 | Each `chunk_id` is in `deps.retrieved` | was not retrieved this turn |
-| 6 | Each `quote` appears verbatim in its chunk's `content` (whitespace ignored) | quote does not appear in its chunk |
-| 7 | Each `[n]` in the text has a citation and each citation is referenced in the text | has no citation / never referenced |
+| 6 | Each `quote` appears verbatim in its chunk's `content`. Whitespace, typographic quotes and dashes are ignored; `...` may skip text if every part is verbatim | quote does not appear in its chunk |
+| 7 | Each `[n]` in the text has a citation and each citation is referenced in the text. Each marker has its own brackets (`[1][2]`, not `[1, 2]`) | has no citation / never referenced / write each marker in its own brackets |
+| 8 | Exact figures (such as `109,158`) written next to a marker appear in a chunk that marker cites, or are a difference or sum of such figures | does not appear in the chunk(s) cited |
 
-It is deterministic and costs no model call. It proves that sources were really retrieved and quotes are real. It does not prove that a claim follows from its quote; that would need an LLM judge, which is not built.
+It is deterministic and costs no model call. It proves that sources were really retrieved, that quotes are real, and that exact figures come from the cited chunks. Check 8 skips rounded values ("$96.2 billion"), years, lines without a marker, and segments that say they are a calculation ("calculat", "approximately", "pp"). It does not prove that a claim follows from its quote, or that the model's own arithmetic is right; that would need an LLM judge, which is not built.
 
 ### What happens on a failure
 
@@ -161,7 +162,7 @@ structlog events printed to the console:
 | Event | Fields |
 | --- | --- |
 | `tool_finished` | `tool`, `seconds`, result count; query and filters for searches |
-| `turn_complete` | `seconds`, `model_requests`, `input_tokens`, `output_tokens`, `passages_retrieved`, `citations`, `insufficient_evidence` |
+| `turn_complete` | `seconds`, `model_requests`, `input_tokens`, `output_tokens`, `token_details` (for example reasoning tokens), `passages_retrieved`, `citations`, `insufficient_evidence` |
 | `grounding_failed` | `seconds`, error |
 
 Most of a turn's time is expected to be model latency, not retrieval. This is why the instructions push for few tool rounds and batched reads.
@@ -188,7 +189,7 @@ uv run python -m scripts.smoke_retrieval
 uv run python -m scripts.smoke_assistant apple-mix
 ```
 
-`smoke_assistant` takes a query key: `apple-mix`, `apple-suppliers`, `amazon-aws` (expect "not enough evidence", since only Apple is ingested), `q10-refusal` and `underspecified`. It runs the same `run_turn` the chat endpoint uses and prints the answer, whether it was grounded, and each citation with its quote and excerpt.
+`smoke_assistant` takes a query key: `apple-mix`, `apple-suppliers`, `amazon-aws` (expect "not enough evidence", since only Apple is ingested), `q10-refusal` and `underspecified` (expect a clarifying question, no search). On Windows set `PYTHONUTF8=1` so the answer prints. It runs the same `run_turn` the chat endpoint uses and prints the answer, whether it was grounded, and each citation with its quote and excerpt.
 
 ## Tests
 

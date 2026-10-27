@@ -35,7 +35,9 @@ class DocumentChunk(Base):
     section: Mapped[str | None]
     content: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int]
-    embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dimensions))
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(settings.embedding_dimensions)
+    )
     search_vector: Mapped[Any] = mapped_column(
         TSVECTOR, Computed("to_tsvector('english', content)", persisted=True)
     )

@@ -8,6 +8,7 @@ from pydantic_ai.messages import ModelMessage
 from app.assistant.agent import agent
 from app.assistant.deps import DocumentAgentDeps
 from app.assistant.outputs import VerifiedAnswer, VerifiedCitation
+from app.assistant.progress import ProgressReporter
 from app.retrieval.retriever import DocumentRetriever
 
 FAILURE_MESSAGE = (
@@ -25,6 +26,7 @@ async def run_turn(
     thread_id: UUID,
     question: str,
     history: list[ModelMessage],
+    progress: ProgressReporter | None = None,
 ) -> VerifiedAnswer:
     """One chat turn: the agent retrieves and answers, grounding checks run inside it.
 
@@ -32,6 +34,8 @@ async def run_turn(
     message, never the unverified text.
     """
     deps = DocumentAgentDeps(user_id=user_id, thread_id=thread_id, retriever=retriever)
+    if progress:
+        deps.progress = progress
     started = time.perf_counter()
     try:
         result = await agent.run(question, message_history=history, deps=deps)
@@ -69,6 +73,7 @@ async def run_turn(
         model_requests=usage.requests,
         input_tokens=usage.input_tokens,
         output_tokens=usage.output_tokens,
+        token_details=usage.details,
         passages_retrieved=len(deps.retrieved),
         citations=len(citations),
         insufficient_evidence=answer.insufficient_evidence,

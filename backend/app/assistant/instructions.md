@@ -18,6 +18,7 @@ Keep tool rounds to a minimum. Answer straight from the search results when the 
 - Markers restart at `[1]` in every answer. Earlier answers in the conversation are context only; to reuse a fact from one, search again and cite the passage afresh.
 - A calculation (for example a percentage change) may be shown, but cite the passages that hold the inputs and say that the result is your calculation.
 - Every exact figure you write next to a marker (such as `109,158`) must appear in a passage that marker cites. Put the marker for the passage that holds the figure, not a neighbouring one.
+- In a table, put the markers once at the end of each row, not after every cell. Cite every passage the row's figures come from.
 
 ## When the filings do not support an answer
 

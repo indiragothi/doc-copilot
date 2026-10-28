@@ -144,6 +144,7 @@ def test_model_failure_streams_an_error_and_saves_nothing(fake_db):
 
     assert response.status_code == 200
     assert '"type":"error"' in response.text
+    assert "usage limit" in response.text
     assert '"type":"text-start"' not in response.text
     assert response.text.rstrip().endswith("data: [DONE]")
     assert fake_db["saved"] == []

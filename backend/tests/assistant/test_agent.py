@@ -7,7 +7,7 @@ from pydantic_ai import UnexpectedModelBehavior
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
-from app.assistant.agent import agent
+from app.assistant.agent import MAX_SEARCHES_PER_TURN, agent
 from app.assistant.deps import DocumentAgentDeps
 from app.retrieval.models import SourcePassage
 
@@ -18,10 +18,12 @@ class FakeRetriever:
     def __init__(self, passages: list[SourcePassage]) -> None:
         self.passages = passages
         self.filters = None
+        self.top_ks = []
 
-    async def search(self, query, *, filters, neighbor_window):
+    async def search(self, query, *, filters, neighbor_window, top_k=None):
         self.filters = filters
-        return self.passages
+        self.top_ks.append(top_k)
+        return [p for p in self.passages if filters.ticker in (None, p.ticker)]
 
     async def read_chunks(self, chunk_ids):
         return [p for p in self.passages if p.chunk_id in chunk_ids]
@@ -79,7 +81,9 @@ def test_grounded_answer_passes_through():
     passage = make_passage()
     deps = make_deps(passage)
     model = scripted(
-        ToolCallPart("search_filings", {"query": "services revenue", "ticker": "aapl"}),
+        ToolCallPart(
+            "search_filings", {"query": "services revenue", "tickers": ["aapl"]}
+        ),
         final(passage.chunk_id, "Services net sales were $96.2 billion"),
     )
 
@@ -93,7 +97,9 @@ def test_grounded_answer_passes_through():
 def test_citing_a_chunk_that_was_never_retrieved_is_retried_then_fails():
     passage = make_passage()
     bad = final(uuid4(), "Services net sales were $96.2 billion")
-    model = scripted(ToolCallPart("search_filings", {"query": "services"}), bad, bad)
+    model = scripted(
+        ToolCallPart("search_filings", {"query": "services"}), bad, bad, bad
+    )
 
     with pytest.raises(UnexpectedModelBehavior):
         run(model, make_deps(passage))
@@ -145,3 +151,33 @@ def test_read_chunks_with_only_unknown_ids_is_retried_then_fails():
 
     with pytest.raises(UnexpectedModelBehavior):
         run(model, make_deps(passage))
+
+
+def test_search_across_companies_takes_a_few_passages_from_each_and_notes_the_missing():
+    passage = make_passage()
+    deps = make_deps(passage)
+    model = scripted(
+        ToolCallPart(
+            "search_filings", {"query": "services revenue", "tickers": ["aapl", "msft"]}
+        ),
+        final(passage.chunk_id, "Services net sales were $96.2 billion"),
+    )
+
+    run(model, deps)
+
+    assert deps.retriever.top_ks == [4, 4]
+    assert deps.retrieved == {passage.chunk_id: passage}
+
+
+def test_searches_past_the_limit_get_a_note_instead_of_results():
+    passage = make_passage()
+    deps = make_deps(passage)
+    search = ToolCallPart("search_filings", {"query": "services revenue"})
+    model = scripted(
+        *[search] * (MAX_SEARCHES_PER_TURN + 1),
+        final(passage.chunk_id, "Services net sales were $96.2 billion"),
+    )
+
+    run(model, deps)
+
+    assert len(deps.retriever.top_ks) == MAX_SEARCHES_PER_TURN

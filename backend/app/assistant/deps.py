@@ -14,3 +14,4 @@ class DocumentAgentDeps:
     progress: ProgressReporter = field(default_factory=ProgressReporter)
     # Every passage a tool returned this turn; the only chunks the answer may cite.
     retrieved: dict[UUID, SourcePassage] = field(default_factory=dict)
+    searches: int = 0

@@ -65,6 +65,14 @@ async def owned_thread(thread_id: UUID, user: CurrentUser) -> dict[str, Any]:
     return thread
 
 
+def model_failure_message(error: Exception) -> str:
+    if getattr(error, "status_code", None) == 429:
+        return (
+            "The model's usage limit was reached. Please wait a minute and try again."
+        )
+    return "The model service failed. Please try again."
+
+
 @router.get("/threads")
 async def list_threads(user: CurrentUserDep) -> list[ThreadResponse]:
     client = await create_user_client(user.access_token)
@@ -125,9 +133,9 @@ async def stream(
             while (step := await steps.get()) is not None:
                 yield sse(status_part(step))
             answer = await turn
-        except (ModelHTTPError, APIError):
+        except (ModelHTTPError, APIError) as error:
             log.warning("model_service_failed", thread_id=str(body.thread_id))
-            for event in error_events("The model service failed. Please try again."):
+            for event in error_events(model_failure_message(error)):
                 yield sse(event)
             return
         finally:

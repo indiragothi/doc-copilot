@@ -245,3 +245,14 @@ def test_quote_with_an_ellipsis_must_still_be_verbatim_in_each_part():
 
     assert validate_answer(ok, {chunk.chunk_id: chunk}) == []
     assert len(validate_answer(bad, {chunk.chunk_id: chunk})) == 1
+
+
+def test_chunk_id_in_the_text_gets_one_specific_violation():
+    chunk = passage()
+    answer = grounded(chunk, text=f"Services grew [{chunk.chunk_id}].")
+
+    violations = validate_answer(answer, {chunk.chunk_id: chunk})
+
+    assert len(violations) == 1
+    assert "chunk id" in violations[0]
+    assert str(chunk.chunk_id)[:8] in violations[0]

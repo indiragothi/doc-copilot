@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from uuid import UUID
 
@@ -18,9 +19,16 @@ MAX_SURROUNDING_CHUNKS = 3
 MAX_BATCH_CHUNKS = 10
 # Search results carry only the start of each passage: full text for eight passages on every
 # search dominated the turn's tokens and latency. `read_chunks` returns the full text.
-SEARCH_PASSAGE_CHARS = 800
-# One corrective retry when validation fails; after that the turn fails closed.
-OUTPUT_RETRIES = 1
+SEARCH_PASSAGE_CHARS = 500
+# A search across several companies returns this many passages per company, so one call
+# covers a comparison that would otherwise take a search per company.
+PASSAGES_PER_COMPANY = 4
+# The model sometimes re-searches the same thing with new wording until the quota is gone;
+# past this many searches it is told to answer from what it has.
+MAX_SEARCHES_PER_TURN = 6
+# Corrective retries when validation fails; after that the turn fails closed. Free-tier models
+# often miss by one citation, so a second chance saves most turns.
+OUTPUT_RETRIES = 2
 
 agent = Agent(
     # Gemini's OpenAI-compatible endpoint drops the thought signatures Gemini 3 needs for
@@ -30,7 +38,10 @@ agent = Agent(
         provider=GoogleProvider(
             api_key=settings.gemini_api_key,
             # The free tier answers 503 "high demand" in spikes; a retry usually gets through.
-            retry_options=HttpRetryOptions(attempts=5, initial_delay=2),
+            # A 429 (quota) is not retried: the wait is minutes, so the analyst is told at once.
+            retry_options=HttpRetryOptions(
+                attempts=4, initial_delay=2, max_delay=10, http_status_codes=[503]
+            ),
         ),
     ),
     deps_type=DocumentAgentDeps,
@@ -65,10 +76,10 @@ def _render(
     return rendered
 
 
-def _describe_search(query: str, filters: SearchFilters) -> str:
+def _describe_search(query: str, filters: SearchFilters, tickers: list[str]) -> str:
     scope = [
         str(value)
-        for value in (filters.ticker, filters.form_type, filters.fiscal_year)
+        for value in (", ".join(tickers), filters.form_type, filters.fiscal_year)
         if value
     ]
     return " · ".join([*scope, f"“{query}”"])
@@ -90,29 +101,53 @@ def _remember(
 async def search_filings(
     ctx: RunContext[DocumentAgentDeps],
     query: str,
-    ticker: str | None = None,
+    tickers: list[str] | None = None,
     fiscal_year: int | None = None,
     form_type: str | None = None,
 ) -> list[dict]:
     """Search the filings for passages relevant to the query.
 
-    Optionally narrow by company ticker (e.g. "AAPL"), fiscal year or form type (e.g. "10-K").
-    Returns an empty list when nothing matches.
+    Optionally narrow by company tickers (e.g. ["AAPL"], or several to compare companies in
+    one call), fiscal year or form type (e.g. "10-K"). Returns an empty list when nothing
+    matches.
     """
-    filters = SearchFilters(
-        ticker=ticker.upper() if ticker else None,
-        fiscal_year=fiscal_year,
-        form_type=form_type,
-    )
+    ctx.deps.searches += 1
+    if ctx.deps.searches > MAX_SEARCHES_PER_TURN:
+        return [
+            {
+                "note": "Search limit reached for this question. Answer now from the "
+                "passages you already have, and say plainly what they do not cover."
+            }
+        ]
+    wanted = list(dict.fromkeys(t.upper() for t in tickers or []))
+    # Several companies: a few passages from each. One company or none: the usual top results.
+    searches = [
+        (
+            SearchFilters(ticker=ticker, fiscal_year=fiscal_year, form_type=form_type),
+            {"top_k": PASSAGES_PER_COMPANY} if len(wanted) > 1 else {},
+        )
+        for ticker in wanted or [None]
+    ]
     with (
         ctx.deps.progress.step(
-            "Searching filings", _describe_search(query, filters)
+            "Searching filings",
+            _describe_search(query, searches[0][0], wanted),
         ) as report,
-        tool_timer("search_filings", query=query, filters=filters.model_dump()) as done,
+        tool_timer(
+            "search_filings",
+            query=query,
+            filters=searches[0][0].model_dump() | {"tickers": wanted},
+        ) as done,
     ):
-        passages = await ctx.deps.retriever.search(
-            query, filters=filters, neighbor_window=0
+        found = await asyncio.gather(
+            *(
+                ctx.deps.retriever.search(
+                    query, filters=filters, neighbor_window=0, **limits
+                )
+                for filters, limits in searches
+            )
         )
+        passages = [passage for group in found for passage in group]
         done(results=len(passages))
         report(f"Found {len(passages)} passages for “{query}”")
     if not passages:
@@ -125,7 +160,13 @@ async def search_filings(
             }
         ]
     _remember(ctx, passages)
-    return [_render(passage, max_chars=SEARCH_PASSAGE_CHARS) for passage in passages]
+    results = [_render(passage, max_chars=SEARCH_PASSAGE_CHARS) for passage in passages]
+    missing = [t for t, group in zip(wanted, found, strict=False) if not group]
+    if missing:
+        results.append(
+            {"note": f"No passages at all for {', '.join(missing)}: not in the corpus."}
+        )
+    return results
 
 
 @agent.tool

@@ -8,7 +8,7 @@ The chat layer ([../chat/orchestrator.py](../chat/orchestrator.py) `run_turn`) c
 
 ## Full pipeline
 
-The turn starts in `../chat/orchestrator.py`, where `run_turn` sends the analyst's question and recent history to the PydanticAI agent defined in `agent.py`, with the product contract from `instructions.md` and the four tools from the same file. The instructions tell the model to call `search_filings` first; that tool delegates to `../retrieval/retriever.py`, which embeds the query, runs semantic (pgvector) and keyword (Postgres full-text) search in parallel, fuses the two rankings with Reciprocal Rank Fusion, and loads the winning chunks with their filing metadata. The agent then decides whether the returned passages are enough to answer: if they are, it produces the final `GroundedAnswer`; if not, it can call `read_chunks`/`read_chunk` for full chunk text, or `read_surrounding_chunks` when it needs the text around a passage. Every tool response is recorded in `deps.retrieved` (from `deps.py`), so the final citations are limited to chunks actually retrieved during that turn. When the agent returns, `../grounding/validator.py` runs as its output validator and compares the structured answer against that record: it checks the answer and citation contract, verifies every `[n]` marker has a matching citation, rejects chunk ids that were never retrieved, and requires each quote to be copied verbatim from the retrieved chunk text. A failure sends the violations back to the model for one retry; a second failure makes `run_turn` return a fixed "could not verify" message instead. Only a verified answer, joined with its source passages, is handed back to the chat layer to persist and stream.
+The turn starts in `../chat/orchestrator.py`, where `run_turn` sends the analyst's question and recent history to the PydanticAI agent defined in `agent.py`, with the product contract from `instructions.md` and the four tools from the same file. The instructions tell the model to call `search_filings` first; that tool delegates to `../retrieval/retriever.py`, which embeds the query, runs semantic (pgvector) and keyword (Postgres full-text) search in parallel, fuses the two rankings with Reciprocal Rank Fusion, and loads the winning chunks with their filing metadata. The agent then decides whether the returned passages are enough to answer: if they are, it produces the final `GroundedAnswer`; if not, it can call `read_chunks`/`read_chunk` for full chunk text, or `read_surrounding_chunks` when it needs the text around a passage. Every tool response is recorded in `deps.retrieved` (from `deps.py`), so the final citations are limited to chunks actually retrieved during that turn. When the agent returns, `../grounding/validator.py` runs as its output validator and compares the structured answer against that record: it checks the answer and citation contract, verifies every `[n]` marker has a matching citation, rejects chunk ids that were never retrieved, and requires each quote to be copied verbatim from the retrieved chunk text. A failure sends the violations back to the model for up to two retries; a further failure makes `run_turn` return a fixed "could not verify" message instead. Only a verified answer, joined with its source passages, is handed back to the chat layer to persist and stream.
 
 ## Diagram
 
@@ -56,7 +56,7 @@ Unlike a typical hybrid search setup, keyword search here does not use an LLM to
 
 | Tool | What it does | Where the data comes from |
 | --- | --- | --- |
-| `search_filings(query, ticker?, fiscal_year?, form_type?)` | Hybrid search, returns up to `retrieval_top_k` passages with no neighbor text. Each passage carries only its first 800 characters (`truncated` says so); `read_chunks` returns full text. Ticker is upper-cased. If nothing matches, a `note` tells the model the filing is not in the corpus and to answer with `insufficient_evidence`. | `DocumentRetriever.search` (stage 2) |
+| `search_filings(query, ticker?, fiscal_year?, form_type?)` | Hybrid search, returns up to `retrieval_top_k` passages with no neighbor text. Each passage carries only its first 500 characters (`truncated` says so); `read_chunks` returns full text. Ticker is upper-cased. If nothing matches, a `note` tells the model the filing is not in the corpus and to answer with `insufficient_evidence`. | `DocumentRetriever.search` (stage 2) |
 | `read_chunks(chunk_ids)` | Several passages in one query, at most 10 ids. Fails the call if none exist. | `DocumentRetriever.read_chunks` |
 | `read_chunk(chunk_id)` | One passage by id. | `DocumentRetriever.read_chunk` |
 | `read_surrounding_chunks(chunk_id, window)` | A passage plus the text of the chunks around it. Window is clamped to 1 to 3. | `DocumentRetriever.read_chunk` with a neighbor window |
@@ -138,10 +138,10 @@ sequenceDiagram
 
 | Situation | Result |
 | --- | --- |
-| Violations on the first answer | Sent back to the model as one retry |
-| Violations again | `run_turn` returns the fixed message and no citations; the unverified text is never exposed |
+| Violations on an answer | Sent back to the model, up to two retries |
+| Violations after the retries | `run_turn` returns the fixed message and no citations; the unverified text is never exposed |
 | Corpus has no evidence | The model sets `insufficient_evidence`; the answer has no citations |
-| Model or API error (for example HTTP 429 or 504) | The exception propagates to the caller; the chat route turns it into HTTP 502 |
+| Model or API error (for example HTTP 429 or 504) | The exception propagates to the caller; the chat stream turns it into an error event ("usage limit reached, wait a minute" for a 429, otherwise "model service failed") |
 
 ## Worked example
 

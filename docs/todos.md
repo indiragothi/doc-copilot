@@ -146,7 +146,7 @@ Goal: grounded answers with enforced citations — the core product contract.
 - ✅ `assistant/instructions.md` — product contract (cite everything, refuse to invent, no stock picks)
 - ✅ PydanticAI agent (`assistant/agent.py`) with typed deps (`DocumentAgentDeps`) and output (`GroundedAnswer`: answer, `[n]` citations, `insufficient_evidence`)
 - ✅ Agent tools: `search_filings`, `read_chunk`, `read_surrounding_chunks`; every returned passage is recorded in `deps.retrieved`, the allow-list for citations
-- ✅ `chat/orchestrator.py` — one turn: agent (retrieve → answer → validate, one corrective retry) → verified answer; fails closed with a fixed message
+- ✅ `chat/orchestrator.py` — one turn: agent (retrieve → answer → validate, up to two corrective retries) → verified answer; fails closed with a fixed message
 - ✅ `grounding/validator.py` — every citation maps to a retrieved passage, quotes appear verbatim in the chunk, markers match the text; runs as the agent's output validator
 - ✅ `chat/streaming.py` — AI SDK-compatible stream (text deltas + `data-citation` parts). The verified answer is streamed after validation, not token by token
 - ✅ Persist `message_citations` linked to assistant messages (admin client: users have read-only RLS on that table); citation parts are also stored in the message's `parts`
@@ -160,8 +160,8 @@ Goal: grounded answers with enforced citations — the core product contract.
   - ✅ Answers cite specific filings and sections
   - ✅ Under-specified questions get a clarifying question instead of a guess
   - ✅ Question 10 (generative AI margins) refuses to infer beyond filings
-- ✅ Chat model moved from OpenRouter to Gemini (native Google client, 5 retries on 503) after the NVIDIA-hosted models were slow (88 s to 15 min per answer, mostly reasoning tokens) or ignored the citation format
-- ✅ Search passages shortened to 800 characters; the validator also checks exact figures against the cited chunks, accepts `...` in quotes and typographic quote variants, and rejects `[1, 2]`
+- ✅ Chat model moved from OpenRouter to Gemini (native Google client; 503s are retried, a 429 quota error fails fast with a "usage limit" message) after the NVIDIA-hosted models were slow (88 s to 15 min per answer, mostly reasoning tokens) or ignored the citation format
+- ✅ Search passages shortened to 500 characters; the validator also checks exact figures against the cited chunks, accepts `...` in quotes and typographic quote variants, and rejects `[1, 2]`
 - [ ] Known gaps: no LLM judge (claims are not checked against their quotes beyond figures); the model's own arithmetic is unchecked; answers took 4–16 s in the browser check but can take up to 3 min under Gemini free-tier load
 
 ---
@@ -187,7 +187,7 @@ Goal: 5 senior analysts can use it for a week and report ≥3 hours saved per an
 
 - [x] README "Running locally" section — copy-paste commands for backend + frontend + env vars
 - [ ] Seed or document how to ingest/update the corpus
-- [ ] Smoke-test all 10 example questions from the client brief
+- [x] Smoke-test all 10 example questions from the client brief: most pass grounded with citations (single-company and risk-factor questions in 25–55 s); the heaviest multi-company questions (capex, geographic) sometimes hit Gemini's free-tier limit of 250K input tokens per minute (HTTP 429) or need a retry for citation format. A paid or multi-key Gemini setup removes the 429s
 - [ ] Confirm chat history persists across sessions
 - [ ] Confirm ~40-user scale assumptions (no hardcoded single-user shortcuts)
 - [x] Basic structured logging on backend (`structlog`): `tool_finished`, `turn_complete`, `grounding_failed`

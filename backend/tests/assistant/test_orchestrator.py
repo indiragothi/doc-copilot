@@ -48,7 +48,9 @@ def test_grounded_answer_is_joined_with_its_source_passage():
 def test_ungrounded_answer_fails_closed_with_the_fixed_message():
     passage = make_passage()
     bad = final(uuid4(), "Services net sales were $96.2 billion")
-    model = scripted(ToolCallPart("search_filings", {"query": "services"}), bad, bad)
+    model = scripted(
+        ToolCallPart("search_filings", {"query": "services"}), bad, bad, bad
+    )
 
     answer = turn(model, passage)
 
@@ -59,7 +61,7 @@ def test_ungrounded_answer_fails_closed_with_the_fixed_message():
 def test_insufficient_evidence_answer_needs_no_citations():
     passage = make_passage()
     model = scripted(
-        ToolCallPart("search_filings", {"query": "amazon aws", "ticker": "AMZN"}),
+        ToolCallPart("search_filings", {"query": "amazon aws", "tickers": ["AMZN"]}),
         ToolCallPart(
             "final_result",
             {
@@ -78,7 +80,7 @@ def test_insufficient_evidence_answer_needs_no_citations():
 def test_progress_reports_each_step_with_its_outcome():
     passage = make_passage()
     model = scripted(
-        ToolCallPart("search_filings", {"query": "services", "ticker": "aapl"}),
+        ToolCallPart("search_filings", {"query": "services", "tickers": ["aapl"]}),
         final(passage.chunk_id, "Services net sales were $96.2 billion"),
     )
     events = []

@@ -23,6 +23,10 @@ CALCULATION = re.compile(
 TYPOGRAPHY = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-"})
 # "[1, 2]" is one bracket holding several markers; each marker must have its own brackets.
 GROUPED_MARKERS = re.compile(r"\[\d+(?:\s*[,;]\s*\d+)+\]")
+# Chunk ids belong in the citations, not in the answer text.
+CHUNK_UUID = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
+)
 
 
 # A quote may skip text with an ellipsis; each part between ellipses must still be verbatim.
@@ -132,11 +136,19 @@ def validate_answer(
             f"Write each marker in its own brackets, e.g. [1][2], not {grouped[0]}."
         )
 
+    ids_in_text = CHUNK_UUID.search(answer.answer)
+    if ids_in_text:
+        violations.append(
+            f"The answer text contains a chunk id ({ids_in_text.group()[:8]}...). Refer to "
+            "passages only with markers like [1], and put the chunk_id in the citation."
+        )
+
     in_text = {int(m) for m in MARKER.findall(answer.answer)}
     cited = set(markers)
     for marker in sorted(in_text - cited):
         violations.append(f"Marker [{marker}] in the answer has no citation.")
-    for marker in sorted(cited - in_text if not grouped else set()):
+    # Unreferenced citations are expected when the markers are malformed; say only what to fix.
+    for marker in sorted(cited - in_text if not (grouped or ids_in_text) else set()):
         violations.append(f"Citation [{marker}] is never referenced in the answer.")
 
     if not violations:

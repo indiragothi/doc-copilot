@@ -185,13 +185,13 @@ Goal: analysts can verify every claim in one click — this is what makes the pr
 
 Goal: 5 senior analysts can use it for a week and report ≥3 hours saved per analyst per week.
 
-- [x] README "Running locally" section — copy-paste commands for backend + frontend + env vars
-- [x] Seed or document how to ingest/update the corpus (README, "Sample SEC data")
-- [x] Smoke-test all 10 example questions from the client brief: most pass grounded with citations (single-company and risk-factor questions in 25–55 s); the heaviest multi-company questions (capex, geographic) sometimes hit Gemini's free-tier limit of 250K input tokens per minute (HTTP 429) or need a retry for citation format. A paid or multi-key Gemini setup removes the 429s
-- [x] Confirm chat history persists across sessions
-- [x] Delete a conversation: trash icon on hover in the sidebar (always visible on touch screens), `DELETE /chat/threads/{id}` (owner only; messages and citations cascade)
+- ✅ README "Running locally" section — copy-paste commands for backend + frontend + env vars
+- ✅ Seed or document how to ingest/update the corpus (README, "Sample SEC data")
+- ✅ Smoke-test all 10 example questions from the client brief: most pass grounded with citations (single-company and risk-factor questions in 25–55 s); the heaviest multi-company questions (capex, geographic) sometimes hit Gemini's free-tier limit of 250K input tokens per minute (HTTP 429) or need a retry for citation format. A paid or multi-key Gemini setup removes the 429s
+- ✅ Confirm chat history persists across sessions
+- ✅ Delete a conversation: trash icon on hover in the sidebar (always visible on touch screens), `DELETE /chat/threads/{id}` (owner only; messages and citations cascade)
 - [ ] Confirm ~40-user scale assumptions (no hardcoded single-user shortcuts)
-- [x] Basic structured logging on backend (`structlog`): `tool_finished`, `turn_complete`, `grounding_failed`
+- ✅ Basic structured logging on backend (`structlog`): `tool_finished`, `turn_complete`, `grounding_failed`
 - [ ] Review latency: streaming starts within a few seconds for typical queries
 
 ---

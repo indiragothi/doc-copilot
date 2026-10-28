@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # Chunks added on each side of a returned passage as context.
     retrieval_neighbor_radius: int = 1
 
-    # PORT is the name Railway injects.
+    # Only used by `python -m app.main`; the Docker image passes host and port to uvicorn itself.
     host: str = "127.0.0.1"
     port: int = 8000
 

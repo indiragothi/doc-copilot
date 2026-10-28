@@ -18,7 +18,7 @@ Full brief: [docs/client-brief.md](docs/client-brief.md)
 | Migrations         | SQLAlchemy models + Alembic                          |
 | Retrieval          | Supabase `pgvector` + Postgres full-text search      |
 | Auth               | Supabase Auth (email only)                           |
-| Hosting            | Railway                                              |
+| Hosting            | Render (Docker images, free instances)               |
 | LLM                | Google Gemini (free tier)                            |
 | Embeddings         | NVIDIA Nemotron embed 1B (OpenAI-compatible API)     |
 

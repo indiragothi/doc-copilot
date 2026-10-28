@@ -196,15 +196,18 @@ Goal: 5 senior analysts can use it for a week and report ≥3 hours saved per an
 
 ---
 
-## Phase 9 — Deployment (Railway)
+## Phase 9 — Deployment (Render)
 
 - ✅ Dockerize: `backend/Dockerfile`, `frontend/Dockerfile` (nginx), `docker-compose.yml`; both images build, containers start, `/health` is 200, SPA deep links and CORS work
-- [ ] Railway: backend service (Uvicorn, env vars, `ALLOWED_ORIGINS`)
-- [ ] Railway: frontend service (Vite build, `VITE_*` env vars at build time)
+- ✅ Render: backend web service from `backend/Dockerfile` (free instance, env vars, `ALLOWED_ORIGINS` set to the frontend URL, health check `/health`)
+- ✅ Render: frontend web service from `frontend/Dockerfile` (`VITE_*` values passed as build args)
+- ✅ Supabase Auth: Site URL and redirect URLs include the live frontend URL
 - [ ] Supabase: re-enable email confirmation for production if disabled during dev
-- [ ] Run `alembic upgrade head` against production Supabase (direct connection)
-- [ ] Run ingestion against production database
-- [ ] End-to-end test on deployed URLs with a real Driftwood-style email account
+- ✅ Production database: the live backend uses the same Supabase project as local work, so migrations (`alembic upgrade head`) and the 25-filing ingestion are already in place
+- ✅ Live check: signed in on the deployed frontend, a grounded answer with citations and source panel came back (question 10 refuses correctly)
+- [ ] Sign-ups: make them invite-only (Supabase) so strangers cannot register on the public URL
+- [ ] End-to-end test on the deployed URLs with a second, Driftwood-style email account
+- Free Render instances sleep after 15 minutes idle; the first request after that takes 30–60 s
 
 ---
 

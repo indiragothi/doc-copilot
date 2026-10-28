@@ -11,7 +11,7 @@ This file is the source of truth for any coding agent (Claude Code, Cursor, Code
 - **Retrieval:** Supabase `pgvector` + Postgres full-text search
 - **Auth:** Supabase Auth
 - **Packaging:** Docker. Each service has its own `Dockerfile` (`backend/`, `frontend/`) and `docker-compose.yml` at the root runs both locally. Hosts deploy the images.
-- **Hosting:** Railway (backend service + frontend service)
+- **Hosting:** Render (backend web service + frontend web service, both from their Docker images, free instances). Switched from Railway because Render's free tier needs no card.
 - **LLM:** Google Gemini on the free tier (`gemini-3.1-flash-lite`), through PydanticAI's native Google client.
 - **Embeddings:** NVIDIA `nvidia/nemotron-3.5-embed-1b` (1024 dims, asymmetric: `input_type` is `query` or `passage`), through NVIDIA's OpenAI-compatible API. Switched from OpenAI because its payments aren't available in India, then from OpenRouter because its free NVIDIA models were repeatedly unavailable (HTTP 504) and too slow.
 

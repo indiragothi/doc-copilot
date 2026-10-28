@@ -14,8 +14,8 @@ The best opening diagram is a service-level view that shows the two core paths: 
 flowchart LR
     user[Analyst] --> browser[Browser<br/>React chat app]
 
-    subgraph railway[Railway]
-        frontend[Frontend service<br/>Vite build]
+    subgraph render[Render]
+        frontend[Frontend service<br/>Vite build + nginx]
         backend[Backend service<br/>FastAPI + PydanticAI]
     end
 
@@ -49,7 +49,7 @@ flowchart LR
 - Use Supabase for identity and durable product state: users, chat threads, source documents, chunks, embeddings, and citation metadata.
 - Use Supabase `pgvector` for semantic retrieval and Postgres full-text search for keyword retrieval.
 - Make the LLM path typed and testable by using PydanticAI agents with explicit dependencies, outputs, and tool boundaries.
-- Preserve a simple deployment model on Railway: one frontend service, one stateless backend service, and hosted Supabase.
+- Preserve a simple deployment model on Render: one frontend service, one stateless backend service, and hosted Supabase.
 
 ## Stack
 
@@ -378,12 +378,12 @@ Do not read environment variables directly from components, route handlers, or s
 
 ## Deployment Shape
 
-Railway should run two services:
+Render runs two web services, each built from its own Docker image:
 
-- Frontend: static Vite build served as a web app.
-- Backend: FastAPI service running Uvicorn.
+- Frontend: static Vite build served by nginx (`frontend/Dockerfile`). `VITE_*` values are build args, so changing one means a rebuild.
+- Backend: FastAPI service running Uvicorn on `$PORT` (`backend/Dockerfile`).
 
-Supabase remains hosted and stores the durable retrieval data. The Railway backend can stay stateless because document chunks, embeddings, full-text search vectors, chats, and citations all live in Supabase Postgres. Raw downloaded filings remain gitignored local ingestion inputs unless a later workflow stores them in object storage.
+Supabase remains hosted and stores the durable retrieval data. The Render backend can stay stateless because document chunks, embeddings, full-text search vectors, chats, and citations all live in Supabase Postgres. Raw downloaded filings remain gitignored local ingestion inputs unless a later workflow stores them in object storage.
 
 ## Implementation Sequence
 

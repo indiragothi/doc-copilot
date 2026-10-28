@@ -68,3 +68,12 @@ uv run data/download.py
 By default this downloads the latest 5 10-K filings for AAPL, MSFT, NVDA, AMZN, and GOOGL into year folders under `data/downloads/` and writes a `manifest.json`.
 `data/convert_to_markdown.py` then converts them to Markdown and Docling JSON, and the `backend/ingest/` scripts load them into Supabase. The current build ingests all 25 filings: Apple, Microsoft, NVIDIA, Amazon and Alphabet, FY2021–2025 (4,530 chunks).
 Downloaded files are gitignored; the `data/` folder itself stays in git for the script and notes.
+
+To add or refresh filings in Supabase, run from `backend/` (needs `DATABASE_URL` and `NVIDIA_API_KEY`):
+
+```bash
+uv run python -m ingest.load_documents   # source_documents rows, idempotent
+uv run python -m ingest.load_chunks      # chunk + embed; skips filings already loaded
+```
+
+`load_chunks` takes `--dry-run` (count chunks and tokens, no embedding calls). Never run two ingestions at once.

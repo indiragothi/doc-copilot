@@ -47,6 +47,11 @@ async def create_thread(client: AsyncClient, user_id: UUID) -> Row:
     return response.data[0]
 
 
+async def delete_thread(client: AsyncClient, thread_id: UUID) -> None:
+    """Messages and their citations go with it (ON DELETE CASCADE)."""
+    await client.table("chat_threads").delete().eq("id", str(thread_id)).execute()
+
+
 async def list_messages(client: AsyncClient, thread_id: UUID) -> list[Row]:
     response = (
         await client.table("chat_messages")

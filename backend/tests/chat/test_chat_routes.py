@@ -49,6 +49,7 @@ def fake_db(monkeypatch):
         "saved": [],
         "citations": [],
         "messages": [],
+        "deleted": [],
         "answer": ANSWER,
         "turn": None,
     }
@@ -89,7 +90,12 @@ def fake_db(monkeypatch):
     monkeypatch.setattr(chat.chats, "save_turn", save_turn)
     monkeypatch.setattr(chat.chats, "save_citations", save_citations)
     monkeypatch.setattr(chat, "run_turn", fake_run_turn)
+
+    async def delete_thread(_, thread_id):
+        state["deleted"].append(str(thread_id))
+
     monkeypatch.setattr(chat.chats, "list_messages", list_messages)
+    monkeypatch.setattr(chat.chats, "delete_thread", delete_thread)
     return state
 
 
@@ -204,8 +210,31 @@ def test_history_returns_ui_messages(fake_db):
     assert response.json()[0]["parts"] == [{"type": "text", "text": "hi"}]
 
 
+def test_delete_own_thread(fake_db):
+    response = client.delete(f"/chat/threads/{THREAD_ID}")
+
+    assert response.status_code == 204
+    assert fake_db["deleted"] == [THREAD_ID]
+
+
+def test_delete_other_users_thread_is_403_and_nothing_deleted(fake_db):
+    fake_db["thread_owner"] = OTHER_ID
+
+    response = client.delete(f"/chat/threads/{THREAD_ID}")
+
+    assert response.status_code == 403
+    assert fake_db["deleted"] == []
+
+
+def test_delete_missing_thread_is_404():
+    other = "11111111-2222-4333-8444-555555555555"
+
+    assert client.delete(f"/chat/threads/{other}").status_code == 404
+
+
 def test_chat_routes_require_auth():
     bare = TestClient(FastAPI(routes=chat.router.routes), raise_server_exceptions=False)
 
+    assert bare.delete(f"/chat/threads/{THREAD_ID}").status_code == 401
     assert bare.get("/chat/threads").status_code == 401
     assert bare.post("/chat/stream", json=stream_body()).status_code == 401

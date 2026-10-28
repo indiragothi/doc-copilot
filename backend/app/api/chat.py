@@ -86,6 +86,13 @@ async def create_thread(user: CurrentUserDep) -> ThreadResponse:
     return ThreadResponse(**await chats.create_thread(client, user.id))
 
 
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_thread(thread_id: UUID, user: CurrentUserDep) -> None:
+    await owned_thread(thread_id, user)
+    client = await create_user_client(user.access_token)
+    await chats.delete_thread(client, thread_id)
+
+
 @router.get("/threads/{thread_id}/messages")
 async def thread_messages(
     thread_id: UUID, user: CurrentUserDep

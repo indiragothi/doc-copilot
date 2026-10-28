@@ -12,5 +12,8 @@ export const listThreads = () => api.get<Thread[]>("/chat/threads")
 
 export const createThread = () => api.post<Thread>("/chat/threads")
 
+export const deleteThread = (threadId: string) =>
+  api.delete<void>(`/chat/threads/${threadId}`)
+
 export const getThreadMessages = (threadId: string) =>
   api.get<ChatMessage[]>(`/chat/threads/${threadId}/messages`)

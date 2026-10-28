@@ -1,15 +1,16 @@
 import { Menu } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
-import { Outlet, useNavigate } from "react-router-dom"
+import { Outlet, useMatch, useNavigate } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
 import { ThreadSidebar } from "@/components/chat/thread-sidebar"
-import { createThread, listThreads, type Thread } from "@/lib/threads"
+import { createThread, deleteThread, listThreads, type Thread } from "@/lib/threads"
 
 export type ChatLayoutContext = { refreshThreads: () => void }
 
 export default function ChatLayout() {
   const navigate = useNavigate()
+  const openThread = useMatch("/chat/:threadId")
   const [threads, setThreads] = useState<Thread[]>([])
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -34,11 +35,22 @@ export default function ChatLayout() {
       .finally(() => setCreating(false))
   }
 
+  function removeThread(thread: Thread) {
+    if (!window.confirm(`Delete "${thread.title ?? "New chat"}"? This cannot be undone.`)) return
+    deleteThread(thread.id)
+      .then(() => {
+        refreshThreads()
+        if (openThread?.params.threadId === thread.id) navigate("/chat")
+      })
+      .catch((err: Error) => setError(err.message))
+  }
+
   return (
     <div className="flex h-svh">
       <ThreadSidebar
         threads={threads}
         onNewChat={newChat}
+        onDelete={removeThread}
         creating={creating}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}

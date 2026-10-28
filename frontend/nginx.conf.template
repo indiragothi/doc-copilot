@@ -1,0 +1,15 @@
+server {
+    listen ${PORT};
+    root /usr/share/nginx/html;
+
+    # Vite's hashed assets never change under the same name, so browsers may keep them.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # React Router owns the URLs: any path that is not a file serves index.html.
+    location / {
+        try_files $uri /index.html;
+        add_header Cache-Control "no-cache";
+    }
+}

@@ -56,6 +56,20 @@ To be added during the build. Setup guides:
 - [Backend](docs/guides/backend-setup.md)
 - [Frontend](docs/guides/frontend-setup.md)
 
+### Running with Docker
+
+Both services have a `Dockerfile` (`backend/`, `frontend/`) and `docker-compose.yml` runs them together. You need Docker Desktop running and the usual `backend/.env` and `frontend/.env`:
+
+```bash
+docker compose --env-file frontend/.env up --build
+```
+
+The app is at http://localhost:5173 and the API at http://localhost:8000. Stop it with `docker compose --env-file frontend/.env down`.
+
+- **Backend image:** Python 3.12 + `uv`, runtime dependencies only (no Docling or test tools), runs as a non-root user and listens on `$PORT` (default 8000). Secrets are not baked in; they come from `backend/.env` here and from the host's env vars when deployed. To migrate the database from the image: `docker compose run --rm backend alembic upgrade head`.
+- **Frontend image:** a Node build stage (pnpm, `pnpm build`) and an nginx stage serving the static files, with `index.html` as the fallback so React Router URLs work on reload. Vite bakes `VITE_*` values into the JavaScript at build time, so they are build args: changing one means rebuilding the image.
+- **Ingestion** still runs from your machine (`uv run python -m ingest...`), not from the image.
+
 ## Sample SEC data
 
 Use the standalone downloader to fetch a small local 10-K sample from SEC EDGAR.

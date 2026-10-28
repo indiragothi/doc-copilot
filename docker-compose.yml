@@ -1,0 +1,23 @@
+# Runs the whole app locally in containers:
+#   docker compose --env-file frontend/.env up --build
+# Backend secrets come from backend/.env; the frontend's public VITE_* values come from
+# frontend/.env via --env-file. App: http://localhost:5173, API: http://localhost:8000.
+services:
+  backend:
+    build: ./backend
+    env_file: backend/.env
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    # Host port 5173 matches ALLOWED_ORIGINS=http://localhost:5173 in backend/.env.
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend

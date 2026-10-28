@@ -1,0 +1,9 @@
+# VITE_* values are passed as build args, not read from a local .env.
+.env
+.env.*
+
+node_modules
+dist
+*.tsbuildinfo
+Dockerfile
+.dockerignore

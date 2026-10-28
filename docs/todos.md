@@ -198,6 +198,7 @@ Goal: 5 senior analysts can use it for a week and report ≥3 hours saved per an
 
 ## Phase 9 — Deployment (Railway)
 
+- ✅ Dockerize: `backend/Dockerfile`, `frontend/Dockerfile` (nginx), `docker-compose.yml`; both images build, containers start, `/health` is 200, SPA deep links and CORS work
 - [ ] Railway: backend service (Uvicorn, env vars, `ALLOWED_ORIGINS`)
 - [ ] Railway: frontend service (Vite build, `VITE_*` env vars at build time)
 - [ ] Supabase: re-enable email confirmation for production if disabled during dev

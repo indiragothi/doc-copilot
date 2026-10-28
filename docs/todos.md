@@ -206,7 +206,7 @@ Goal: 5 senior analysts can use it for a week and report ≥3 hours saved per an
 - ✅ Production database: the live backend uses the same Supabase project as local work, so migrations (`alembic upgrade head`) and the 25-filing ingestion are already in place
 - ✅ Live check: signed in on the deployed frontend, a grounded answer with citations and source panel came back (question 10 refuses correctly)
 - [ ] Sign-ups: make them invite-only (Supabase) so strangers cannot register on the public URL
-- [ ] End-to-end test on the deployed URLs with a second, Driftwood-style email account
+- ✅ End-to-end test on the deployed URLs with a second email account (sign-up, sign-in, own chats per user)
 - Free Render instances sleep after 15 minutes idle; the first request after that takes 30–60 s
 
 ---

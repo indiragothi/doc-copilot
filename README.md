@@ -2,6 +2,13 @@
 
 An internal AI chatbot that lets analysts query a corpus of documents in plain English and get sourced, citable answers.
 
+## Live demo
+
+- App: https://document-copilot-13eg.onrender.com
+- API health check: https://doc-copilot.onrender.com/health
+
+Sign-ups are closed, so a new account needs an invite. Both services run on Render's free tier and sleep after 15 minutes without traffic: the first request after a pause can take 30–60 seconds.
+
 ## The client
 
 **Driftwood Capital** — fictional independent investment research firm. Their analysts spend half their week reading 10-Ks and 10-Qs before they can produce any original analysis. Document Copilot eats that intake work so they can skip straight to insight.

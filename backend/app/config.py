@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Chat goes to Gemini, embeddings to NVIDIA's OpenAI-compatible API.
     gemini_api_key: str
     llm_model: str
+    # Checks the answer's claims against its citations. A different model than the chat one,
+    # because free-tier quota is counted per model and the judge must not eat the chat's.
+    judge_model: str
     nvidia_api_key: str
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     embedding_model: str

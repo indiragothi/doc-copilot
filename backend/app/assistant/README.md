@@ -143,6 +143,16 @@ sequenceDiagram
 | Corpus has no evidence | The model sets `insufficient_evidence`; the answer has no citations |
 | Model or API error (for example HTTP 429 or 504) | The exception propagates to the caller; the chat stream turns it into an error event ("usage limit reached, wait a minute" for a 429, otherwise "model service failed") |
 
+### The claim judge
+
+The validator checks structure (the chunk exists, the quote is verbatim, figures match). It cannot tell whether a *claim* follows from its passage, so after the agent finishes, `run_turn` calls `check_claims`: a second, small LLM call (`grounding/judge.py`, model `settings.judge_model`) that receives the answer plus each cited passage and lists the claims the passages do not support (marker, claim, reason).
+
+- **Advisory for now.** The answer is never changed or held back. Findings are logged (`judge_result`, at `warning` level when something is flagged) so the prompt in `grounding/judge_instructions.md` can be tuned on real answers before the judge is allowed to block.
+- **It cannot break a turn.** A judge error (429, invalid output) is logged as `judge_failed` and the answer goes out as usual.
+- **Skipped** when the answer has no citations or sets `insufficient_evidence`.
+- **Own quota.** `JUDGE_MODEL` is a different model from `LLM_MODEL` because Gemini's free-tier limits are counted per model. Cost: one extra request per cited answer, a few thousand input tokens, a few seconds of latency. The analyst sees a "Checking claims" status step.
+- **Making it block later:** move the call into the output validator and raise `ModelRetry` with the flagged claims. That counts against `OUTPUT_RETRIES`.
+
 ## Worked example
 
 Question: *How did Apple's Services revenue change in FY2025?*
@@ -164,6 +174,8 @@ structlog events printed to the console:
 | `tool_finished` | `tool`, `seconds`, result count; query and filters for searches |
 | `turn_complete` | `seconds`, `model_requests`, `input_tokens`, `output_tokens`, `token_details` (for example reasoning tokens), `passages_retrieved`, `citations`, `insufficient_evidence` |
 | `grounding_failed` | `seconds`, error |
+| `judge_result` | `seconds`, `input_tokens`, `unsupported` (count), `claims` (marker, claim, reason) |
+| `judge_failed` | error |
 
 Most of a turn's time is expected to be model latency, not retrieval. This is why the instructions push for few tool rounds and batched reads.
 
@@ -178,7 +190,9 @@ Most of a turn's time is expected to be model latency, not retrieval. This is wh
 | `progress.py` | `tool_timer`, used by the tools for timing logs |
 | `../retrieval/` | Hybrid search (embed, vector and full-text search, RRF) |
 | `../grounding/validator.py` | Citation validation |
-| `../chat/orchestrator.py` | `run_turn`: runs the agent, joins citations, fails closed |
+| `../grounding/judge.py` | The claim judge: its agent, prompt builder and `judge_answer` |
+| `../grounding/judge_instructions.md` | The judge's prompt |
+| `../chat/orchestrator.py` | `run_turn`: runs the agent, runs `check_claims`, joins citations, fails closed |
 
 ## Smoke tests
 
@@ -197,4 +211,5 @@ No network or database; the model is a scripted fake.
 
 - `tests/grounding/test_validator.py`: every validator rule
 - `tests/assistant/test_agent.py`: tool behavior, retry then fail, corrected answer accepted
-- `tests/assistant/test_orchestrator.py`: verified answer, fail closed, insufficient evidence
+- `tests/assistant/test_orchestrator.py`: verified answer, fail closed, insufficient evidence, and the judge (flagged claims are logged, a failing judge does not break the turn, uncited answers are not judged)
+- `tests/grounding/test_judge.py`: what the judge is shown, and the verdict it returns

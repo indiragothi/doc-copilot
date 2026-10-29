@@ -162,7 +162,9 @@ Goal: grounded answers with enforced citations — the core product contract.
   - ✅ Question 10 (generative AI margins) refuses to infer beyond filings
 - ✅ Chat model moved from OpenRouter to Gemini (native Google client; 503s are retried, a 429 quota error fails fast with a "usage limit" message) after the NVIDIA-hosted models were slow (88 s to 15 min per answer, mostly reasoning tokens) or ignored the citation format
 - ✅ Search passages shortened to 500 characters; the validator also checks exact figures against the cited chunks, accepts `...` in quotes and typographic quote variants, and rejects `[1, 2]`
-- [ ] Known gaps: no LLM judge (claims are not checked against their quotes beyond figures); the model's own arithmetic is unchecked; answers took 4–16 s in the browser check but can take up to 3 min under Gemini free-tier load
+- ✅ LLM claim judge (advisory): after the agent answers, `gemini-3.5-flash-lite` (`JUDGE_MODEL`) lists claims the cited passages do not support; findings are logged (`judge_result`, `judge_failed`), the answer is never changed (`grounding/judge.py`, `check_claims` in `chat/orchestrator.py`)
+- [ ] Tune the judge on live answers (false flags), then let it block: move it into the output validator and raise `ModelRetry`
+- [ ] Known gaps: the judge is not blocking yet; answers took 4–16 s in the browser check but can take up to 3 min under Gemini free-tier load
 
 ---
 

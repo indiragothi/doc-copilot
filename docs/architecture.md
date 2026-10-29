@@ -371,6 +371,7 @@ Backend settings:
 - `NVIDIA_API_KEY`
 - `ALLOWED_ORIGINS`
 - `LLM_MODEL`
+- `JUDGE_MODEL` (the claim judge; a different Gemini model so its free-tier quota is separate)
 - `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` (1024)
 - `RETRIEVAL_TOP_K`, `RETRIEVAL_CANDIDATE_K`, `RETRIEVAL_RRF_K`, `RETRIEVAL_NEIGHBOR_RADIUS` (optional; defaults 8, 50, 60, 1)
 

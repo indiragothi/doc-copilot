@@ -3,12 +3,14 @@ from uuid import UUID
 
 import structlog
 from pydantic_ai import UnexpectedModelBehavior
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage
 
 from app.assistant.agent import agent
 from app.assistant.deps import DocumentAgentDeps
-from app.assistant.outputs import VerifiedAnswer, VerifiedCitation
+from app.assistant.outputs import GroundedAnswer, VerifiedAnswer, VerifiedCitation
 from app.assistant.progress import ProgressReporter
+from app.grounding.judge import judge_answer
 from app.retrieval.retriever import DocumentRetriever
 
 FAILURE_MESSAGE = (
@@ -17,6 +19,34 @@ FAILURE_MESSAGE = (
 )
 
 log = structlog.get_logger()
+
+
+async def check_claims(answer: GroundedAnswer, deps: DocumentAgentDeps) -> None:
+    """Have the judge model look for claims the citations do not support, and log what it finds.
+
+    Advisory for now: the answer is never changed or held back, and a judge failure (quota,
+    bad output) only gets logged, so the judge cannot break a turn the validator accepted.
+    """
+    if answer.insufficient_evidence or not answer.citations:
+        return
+    started = time.perf_counter()
+    with deps.progress.step("Checking claims") as report:
+        try:
+            result = await judge_answer(answer, deps.retrieved)
+        except (ModelHTTPError, UnexpectedModelBehavior) as error:
+            log.warning("judge_failed", thread_id=str(deps.thread_id), error=str(error))
+            report("Claim check unavailable")
+            return
+        report("Claims checked against the cited passages")
+    unsupported = result.output.unsupported
+    (log.warning if unsupported else log.info)(
+        "judge_result",
+        thread_id=str(deps.thread_id),
+        seconds=round(time.perf_counter() - started, 2),
+        input_tokens=result.usage.input_tokens,
+        unsupported=len(unsupported),
+        claims=[claim.model_dump() for claim in unsupported],
+    )
 
 
 async def run_turn(
@@ -49,6 +79,7 @@ async def run_turn(
         return VerifiedAnswer(text=FAILURE_MESSAGE)
 
     answer = result.output
+    await check_claims(answer, deps)
     citations = [
         VerifiedCitation(
             marker=citation.marker,

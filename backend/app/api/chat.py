@@ -141,7 +141,13 @@ async def stream(
                 yield sse(status_part(step))
             answer = await turn
         except (ModelHTTPError, APIError) as error:
-            log.warning("model_service_failed", thread_id=str(body.thread_id))
+            # The status and the start of the body say which quota (per minute or per day) ran out.
+            log.warning(
+                "model_service_failed",
+                thread_id=str(body.thread_id),
+                status=getattr(error, "status_code", None),
+                error=str(error)[:1500],
+            )
             for event in error_events(model_failure_message(error)):
                 yield sse(event)
             return

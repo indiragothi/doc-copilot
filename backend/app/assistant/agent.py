@@ -24,8 +24,9 @@ SEARCH_PASSAGE_CHARS = 500
 # covers a comparison that would otherwise take a search per company.
 PASSAGES_PER_COMPANY = 4
 # The model sometimes re-searches the same thing with new wording until the quota is gone;
-# past this many searches it is told to answer from what it has.
-MAX_SEARCHES_PER_TURN = 6
+# past this many searches it is told to answer from what it has. Every model request resends
+# the whole context, so each extra search round also spends the free tier's per-minute tokens.
+MAX_SEARCHES_PER_TURN = 4
 # Corrective retries when validation fails; after that the turn fails closed. Free-tier models
 # often miss by one citation, so a second chance saves most turns.
 OUTPUT_RETRIES = 2
